@@ -241,6 +241,32 @@ def test_evidence_gaps_render_as_their_own_block_and_vanish_when_empty():
     assert "Underwriter audit notes" in blob2, "the rest of Part5 still renders"
 
 
+def test_income_sheet_labels_turnover_gross_and_prints_the_assessable_total():
+    summary = {
+        "assessment_date": "2026-09-01",
+        "income": [
+            {"source": "ACME", "type": "salary_wages", "amount_observed": 4000,
+             "frequency": "monthly", "monthly_equivalent": 4000, "evidence": "2026-06-03"},
+            {"source": "Side business (unassessed) - 14 payers",
+             "type": "side_business_gross_not_assessable", "amount_observed": 1400,
+             "frequency": "irregular", "monthly_equivalent": 463.44,
+             "gross_net": "GROSS RECEIPTS - not net profit. Excluded from assessable income; obtain business financials.",
+             "evidence": "14 credits, 2026-06-01 to 2026-06-27"},
+        ],
+        "audit": {"assessable_income_monthly": 4000, "side_business_gross_monthly": 463.44},
+        "part5": {},
+    }
+    ws = load_workbook(BytesIO(build_workbook(summary)))["1.4 Income"]
+    rows = [[str(c.value or "") for c in row] for row in ws.iter_rows()]
+    salary = next(r for r in rows if r[0] == "ACME")
+    assert salary[5] == "unknown", salary
+    side = next(r for r in rows if r[0].startswith("Side business"))
+    assert "GROSS RECEIPTS" in side[5], side
+    total = next(r for r in rows if r[0].startswith("ASSESSABLE INCOME"))
+    assert total[4] == "4000", total
+    assert "servicing" in total[5]
+
+
 if __name__ == "__main__":
     test_renderer_writes_original_prompt_blocks()
     print("ok test_renderer_writes_original_prompt_blocks")
@@ -252,4 +278,6 @@ if __name__ == "__main__":
     print("ok test_part2_writes_direction_column")
     test_evidence_gaps_render_as_their_own_block_and_vanish_when_empty()
     print("ok test_evidence_gaps_render_as_their_own_block_and_vanish_when_empty")
+    test_income_sheet_labels_turnover_gross_and_prints_the_assessable_total()
+    print("ok test_income_sheet_labels_turnover_gross_and_prints_the_assessable_total")
     print("ALL PASS")

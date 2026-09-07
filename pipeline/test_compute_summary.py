@@ -1057,6 +1057,45 @@ def test_business_receipts_do_not_silence_the_unresolved_spend_note():
     assert out["business_monthly"] == 0
 
 
+def test_trading_turnover_gets_its_own_income_line_outside_assessable_income():
+    """Visible in Part 1.4, and left out of the number servicing runs on."""
+
+    txns, cls = [], []
+    for i in range(14):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off"))
+    txns.append(_txn("w1", "2026-06-03", "SALARY ACME", 4000, "inflow", "ACME"))
+    txns.append(_txn("w2", "2026-07-03", "SALARY ACME", 4000, "inflow", "ACME"))
+    cls.append(_cls("w1", "salary_wages", False, "monthly"))
+    cls.append(_cls("w2", "salary_wages", False, "monthly"))
+
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    side = [r for r in out["income"] if r["type"] == "side_business_gross_not_assessable"]
+    assert len(side) == 1, [r["type"] for r in out["income"]]
+    row = side[0]
+    assert row["amount_observed"] == 1400
+    assert "GROSS RECEIPTS" in row["gross_net"], row["gross_net"]
+    assert "not net profit" in row["gross_net"]
+    assert "14 payers" in row["source"], row["source"]
+
+    # The turnover is reported and then kept out of the servicing figure.
+    assert out["audit"]["side_business_gross_monthly"] == row["monthly_equivalent"]
+    assert out["audit"]["assessable_income_monthly"] == 4000, out["audit"]
+    assert row["monthly_equivalent"] > 0
+
+
+def test_no_side_business_line_when_there_is_no_trading_shape():
+    """One payer is not a business, so Part 1.4 gains nothing."""
+
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"b{i}", f"2026-06-{(i % 27) + 1:02d}", "A FLATMATE", 200, "inflow", "A FLATMATE"))
+        cls.append(_cls(f"b{i}", "unclear", False, "weekly"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert not [r for r in out["income"] if r["type"] == "side_business_gross_not_assessable"]
+    assert out["audit"]["side_business_gross_monthly"] == 0
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1091,6 +1130,8 @@ if __name__ == "__main__":
         test_trading_turnover_uses_the_span_not_the_sum_of_statement_days,
         test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero,
         test_business_receipts_do_not_silence_the_unresolved_spend_note,
+        test_trading_turnover_gets_its_own_income_line_outside_assessable_income,
+        test_no_side_business_line_when_there_is_no_trading_shape,
     ]
     for fn in tests:
         fn()

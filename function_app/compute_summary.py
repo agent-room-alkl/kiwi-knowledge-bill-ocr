@@ -571,6 +571,10 @@ REMITTANCE_MIN_AMOUNT = 500.0
 SIDE_INCOME_MAX_TICKET = 500.0
 SIDE_INCOME_MIN_CREDITS = 10
 SIDE_INCOME_MIN_PAYERS = 5
+# Named, not a bare string, because two places have to agree on it: the
+# income row that carries the turnover and the audit figure that leaves it
+# out. A servicing calculation reads the second one.
+SIDE_INCOME_TYPE = "side_business_gross_not_assessable"
 
 
 def _observation_months(accounts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> float:
@@ -1234,6 +1238,53 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
     gaps = evidence_gaps(
         joined, accounts, applicant, assessment_date, insurance_monthly, utility_monthly
     )
+
+    # The trading receipts get a line of their own in Part 1.4, because an
+    # underwriter should not have to find $2,000 a month of business turnover
+    # by reading Part 5. It is one line, it says GROSS in the column a reader
+    # checks for gross-versus-net, and it is left out of
+    # audit.assessable_income_monthly - what a bank statement evidences here
+    # is money arriving, not profit, and servicing runs on profit.
+    trading = next(
+        (g for g in gaps if g["topic"] == "Unassessed receipts - possible trading income"),
+        None,
+    )
+    if trading:
+        credits = [
+            r for r in joined
+            if r.get("direction") == "inflow"
+            and r.get("category") in {"unclear", "underwriter_manual"}
+            and 0 < abs(float(r.get("amount") or 0)) <= SIDE_INCOME_MAX_TICKET
+        ]
+        total = sum(abs(float(r.get("amount") or 0)) for r in credits)
+        months = _observation_months(accounts, credits)
+        payers = {str(r.get("merchant_normalized") or r.get("description") or "").strip().upper()
+                  for r in credits}
+        payers.discard("")
+        dates = sorted(str(r.get("date"))[:10] for r in credits)
+        income_rows.append({
+            "source": f"Side business (unassessed) - {len(payers)} payers",
+            "type": SIDE_INCOME_TYPE,
+            "amount_observed": round(total, 2),
+            "frequency": "irregular",
+            "monthly_equivalent": round(total / months, 2),
+            "gross_net": (
+                "GROSS RECEIPTS - not net profit. Excluded from assessable income; "
+                "obtain business financials."
+            ),
+            "evidence": (
+                f"{len(credits)} credits, {dates[0]} to {dates[-1]}" if dates else "no dates"
+            ),
+        })
+
+    assessable_income_monthly = round(
+        sum(
+            float(r.get("monthly_equivalent") or 0)
+            for r in income_rows
+            if r.get("type") != SIDE_INCOME_TYPE
+        ),
+        2,
+    )
     underwriter_notes = [
         {"topic": "File quality", "note": f"{len(accounts)} statement records; {len(txns)} canonical rows; {len(extraction_errors)} extraction errors.", "requires_signoff": bool(extraction_errors)},
         {
@@ -1385,6 +1436,15 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         },
         "audit": {
             "transaction_count": len(txns),
+            "assessable_income_monthly": assessable_income_monthly,
+            "side_business_gross_monthly": round(
+                sum(
+                    float(r.get("monthly_equivalent") or 0)
+                    for r in income_rows
+                    if r.get("type") == SIDE_INCOME_TYPE
+                ),
+                2,
+            ),
             "info_rows_zeroed": sum(1 for t in txns if t.get("direction") == "info"),
             "rent_monthly": round(category_monthly.get("rent_board_paid", 0.0), 2),
             "is_business_classifications": n_explicit_business,

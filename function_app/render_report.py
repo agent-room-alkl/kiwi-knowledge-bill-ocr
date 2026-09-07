@@ -145,10 +145,25 @@ def build_workbook(summary: dict[str, Any], applicant: dict[str, Any] | None = N
                 row.get("amount_observed"),
                 row.get("frequency"),
                 row.get("monthly_equivalent"),
-                "unknown",
+                # Gross/net was hardcoded "unknown". A row that knows it is
+                # turnover has to be able to say so in the column a reader
+                # checks before using the number.
+                row.get("gross_net") or "unknown",
                 row.get("evidence"),
             ]
         )
+    audit = summary.get("audit") or {}
+    if audit.get("side_business_gross_monthly"):
+        ws.append([])
+        ws.append([
+            "ASSESSABLE INCOME (excludes side-business turnover)",
+            "",
+            "",
+            "",
+            audit.get("assessable_income_monthly"),
+            "Use this for servicing",
+            "",
+        ])
 
     ws = wb.create_sheet("Part1 Summary")
     ws.append(["Category", "Monthly equivalent", "Notes"])
