@@ -566,6 +566,11 @@ _REMITTER = (
 )
 REMITTANCE_WINDOW_DAYS = 30
 REMITTANCE_MIN_AMOUNT = 500.0
+# Trading receipts look like this: lots of small credits, lots of different
+# payers. One flatmate paying board is neither.
+SIDE_INCOME_MAX_TICKET = 500.0
+SIDE_INCOME_MIN_CREDITS = 10
+SIDE_INCOME_MIN_PAYERS = 5
 
 
 def _row_blob(row: dict[str, Any]) -> str:
@@ -681,6 +686,41 @@ def evidence_gaps(
                     f"the reason for the transfer is not evidenced.",
                     [f"{r['date']} {str(r.get('description') or '')[:40]} {abs(float(r.get('amount') or 0)):.2f}" for r in recent],
                 ))
+
+    # (f) Many small credits from many different payers, none of them read as
+    # income. That is the shape of trading receipts, and a side business the
+    # file never assessed changes both sides of the assessment: the receipts
+    # are not in income, and the cost of whatever was sold is sitting in
+    # household spending. Deliberately shape-based - counterparty count and
+    # ticket size - rather than guessing which descriptions are personal
+    # names; a name heuristic misreads shop names and remitters, and this
+    # check has to be defensible to an underwriter.
+    credits = [
+        r for r in rows
+        if r.get("direction") == "inflow"
+        and r.get("category") in {"unclear", "underwriter_manual"}
+        and 0 < abs(float(r.get("amount") or 0)) <= SIDE_INCOME_MAX_TICKET
+    ]
+    payers = {str(r.get("merchant_normalized") or r.get("description") or "").strip().upper()
+              for r in credits}
+    payers.discard("")
+    if len(credits) >= SIDE_INCOME_MIN_CREDITS and len(payers) >= SIDE_INCOME_MIN_PAYERS:
+        total = sum(abs(float(r.get("amount") or 0)) for r in credits)
+        months = max(sum(int(a.get("days_covered") or 0) for a in accounts) / 30.44, 1.0)
+        gaps.append(_gap(
+            "Unassessed receipts - possible trading income",
+            f"{len(credits)} credit(s) totalling {total:.2f} ({total / months:.2f}/month) "
+            f"from {len(payers)} different payers, none classified as income. That is the "
+            f"shape of trading receipts. If it is a business, this binder shows turnover "
+            f"and not profit - the receipts are outside income and the cost of sales is "
+            f"inside household spending. Obtain business financials before relying on "
+            f"either figure.",
+            sorted(
+                (f"{r['date']} {str(r.get('description') or '')[:34]} "
+                 f"{abs(float(r.get('amount') or 0)):.2f}" for r in credits),
+                key=lambda t: -float(t.rsplit(" ", 1)[1]),
+            ),
+        ))
 
     return gaps
 
@@ -1232,6 +1272,25 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             }
         )
     underwriter_notes.extend(rent_cadence_notes)
+    # The model answered is_business on every row and never once said yes,
+    # while leaving some rows unresolved. "Nothing was found" and "some rows
+    # could not be decided" print the same $0 in Part 1, so say which it is.
+    business_yes = sum(1 for r in joined if r.get("is_business") == "yes")
+    business_review = sum(1 for r in joined if r.get("is_business") == "review")
+    if not business_classification_missing and business_yes == 0 and business_review:
+        underwriter_notes.insert(
+            0,
+            {
+                "topic": "Business spend not resolved",
+                "note": (
+                    f"No row is marked as business spend, but {business_review} row(s) "
+                    f"came back unresolved. Business expenses report as 0.00 and every "
+                    f"unresolved row is inside recommended living. Zero here means "
+                    f"undecided, not absent."
+                ),
+                "requires_signoff": True,
+            },
+        )
     if business_classification_missing:
         underwriter_notes.insert(
             0,

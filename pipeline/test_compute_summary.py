@@ -930,6 +930,79 @@ def test_evidence_gaps_note_appears_exactly_once():
     assert topics.count("Evidence gaps") == 1, topics
 
 
+def test_many_small_credits_from_many_payers_are_flagged_as_possible_trading():
+    """Trading receipts are named as turnover, and no money moves.
+
+    Shape-based on purpose: the check counts payers and ticket sizes rather
+    than deciding which descriptions are personal names. Applied to this
+    applicant's file that distinction matters - a name heuristic put a
+    coworking provider and a currency-conversion line in the person bucket.
+    """
+
+    txns, cls = [], []
+    for i in range(14):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 40 + i, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    gaps = {g["topic"]: g for g in out["part5"]["evidence_gaps"]}
+    topic = "Unassessed receipts - possible trading income"
+    assert topic in gaps, list(gaps)
+    note = gaps[topic]["note"]
+    assert "14 credit(s)" in note, note
+    assert "14 different payers" in note, note
+    assert "turnover and not profit" in note, note
+
+    control = compute_summary(*_rent_only_binder())
+    assert out["audit"]["rent_monthly"] == control["audit"]["rent_monthly"] == 2400
+    assert out["recommended_monthly_living"] == control["recommended_monthly_living"]
+    assert not any(r["category"] == "Other" and r["monthly_equivalent"] for r in out["part1"])
+
+
+def test_one_regular_payer_is_not_a_business():
+    """Board from a single flatmate must not read as trading receipts."""
+
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"b{i}", f"2026-06-{(i % 27) + 1:02d}", "A FLATMATE", 200, "inflow", "A FLATMATE"))
+        cls.append(_cls(f"b{i}", "unclear", False, "weekly"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    topics = [g["topic"] for g in out["part5"]["evidence_gaps"]]
+    assert "Unassessed receipts - possible trading income" not in topics, topics
+
+
+def test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero():
+    """0 business spend must not read the same as 'we could not decide'."""
+
+    txns = [
+        _txn("w1", "2026-06-10", "SOME SUPPLIER", 300, "outflow", "SOME SUPPLIER"),
+        _txn("w2", "2026-07-10", "SOME SUPPLIER", 300, "outflow", "SOME SUPPLIER"),
+    ]
+    cls = [
+        _cls("w1", "monthly_subscriptions", True, "monthly", is_business="review"),
+        _cls("w2", "monthly_subscriptions", True, "monthly", is_business="no"),
+    ]
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert out["business_monthly"] == 0
+    note = next(
+        (n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Business spend not resolved"),
+        None,
+    )
+    assert note is not None, [n["topic"] for n in out["part5"]["underwriter_notes"]]
+    assert note["requires_signoff"] is True
+    assert "1 row(s) came back unresolved" in note["note"], note["note"]
+    assert "undecided, not absent" in note["note"], note["note"]
+
+    # Every row decided and none of them business: that IS a clean zero.
+    clean_cls = [
+        _cls("w1", "monthly_subscriptions", True, "monthly", is_business="no"),
+        _cls("w2", "monthly_subscriptions", True, "monthly", is_business="no"),
+    ]
+    clean = compute_summary(*_rent_only_binder(txns, clean_cls))
+    assert not any(
+        n["topic"] == "Business spend not resolved" for n in clean["part5"]["underwriter_notes"]
+    )
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -959,6 +1032,9 @@ if __name__ == "__main__":
         test_evidence_gaps_stay_quiet_when_the_binder_answers_them,
         test_evidence_gaps_survive_a_malformed_transaction_date,
         test_evidence_gaps_note_appears_exactly_once,
+        test_many_small_credits_from_many_payers_are_flagged_as_possible_trading,
+        test_one_regular_payer_is_not_a_business,
+        test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero,
     ]
     for fn in tests:
         fn()
