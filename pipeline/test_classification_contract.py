@@ -37,9 +37,25 @@ def test_xlsx_prompt_has_the_same_side_business_rules():
     assert "USD @ conversion rate" in text
 
 
+def test_selfcheck_ignores_side_business_turnover_when_judging_empty_income():
+    """C8 must not pass on turnover alone.
+
+    The engine reports side-business receipts as an income row so an
+    underwriter can see them. If C8 keeps reading "income is non-empty", a
+    binder whose salary never got classified sails through on bun money.
+    """
+    for name in ("PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt", "prompt-foundry-v2.md"):
+        text = (ROOT / "foundry" / name).read_text(encoding="utf-8")
+        assert "side_business_gross_not_assessable" in text, name
+        assert "audit.assessable_income_monthly" in text, name
+        assert "turnover alone" in text, name
+
+
 if __name__ == "__main__":
     test_side_business_receipts_are_not_salary_or_living()
     print("ok test_side_business_receipts_are_not_salary_or_living")
     test_xlsx_prompt_has_the_same_side_business_rules()
     print("ok test_xlsx_prompt_has_the_same_side_business_rules")
+    test_selfcheck_ignores_side_business_turnover_when_judging_empty_income()
+    print("ok test_selfcheck_ignores_side_business_turnover_when_judging_empty_income")
     print("ALL PASS")

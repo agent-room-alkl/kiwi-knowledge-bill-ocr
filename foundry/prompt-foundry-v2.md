@@ -152,12 +152,18 @@ Any FAIL → do not render; report `SELFCHECK_FAILED` with the C-numbers.
   while part2 has outflows
 - C3 any part2 description is opening/closing/brought/carried forward
 - C4 amount equals that row's balance on >3 rows **and** >5% of rows
-- C5 only if total income > 0: one living line > income, or recommended
-  living > income × 3; if no income, skip with a WARN (C8 covers it)
+- C5 only if assessable income > 0: one living line > that income, or
+  recommended living > it × 3; if none, skip with a WARN (C8 covers it).
+  Use `audit.assessable_income_monthly`, never the raw income total — that
+  total includes side-business turnover, which is not assessable income
 - C6 rent exists in part2 but Part 1 Rent is 0
 - C7 POSREJ/DECLINED/REVERSED/NSF/DISHONOUR still has a non-zero amount
-- C8 `income` empty while part2 has inflows → go back to step 2, classify
-  inflows, re-run compute — do not render
+- C8 no *assessable* income while part2 has inflows → go back to step 2,
+  classify inflows, re-run compute — do not render. Ignore income rows of
+  type `side_business_gross_not_assessable` when judging empty: that row is
+  gross turnover the engine reports for visibility, and a binder whose
+  salary went unclassified would otherwise pass C8 on turnover alone.
+  `audit.assessable_income_monthly == 0` is the check
 - C9 classification count ≠ canonical transaction count
 - C10 >15% unclear → WARN only, still render. Report the count in the
   six-line summary. Do not treat C10 as SELFCHECK_FAILED.
