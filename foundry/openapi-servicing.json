@@ -1,0 +1,700 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Vikas lender servicing tools",
+    "version": "0.2.0",
+    "description": "Extract NZ bank statements, compute servicing totals in code, render Excel. The model classifies only. v0.2 adds applicant, document_index, conduct, part2_calculations, part4, subtype_breakdowns, and annualised part5."
+  },
+  "servers": [
+    {
+      "url": "https://vikas-servicing-fn-a3cacpaqhccgc7dy.australiaeast-01.azurewebsites.net/api"
+    }
+  ],
+  "paths": {
+    "/extract_and_normalize": {
+      "post": {
+        "operationId": "extract_and_normalize",
+        "summary": "Turn user-supplied statement files into canonical transaction rows using Document Intelligence layout. Prefer `binder`: name the storage container and the server reads the files itself. Returns a `batch_id` - hand that to compute_summary rather than copying the rows back. Does not classify or total.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "assessment_date"
+                ],
+                "properties": {
+                  "assessment_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "binder": {
+                    "type": "string",
+                    "description": "Storage container holding this applicant's statements, e.g. \"vikas-samples\". PREFERRED. The server lists and reads the container with its own credentials, so no URL or access token has to pass through the conversation. Lowercase letters, digits and single hyphens, 3-63 characters."
+                  },
+                  "prefix": {
+                    "type": "string",
+                    "description": "Optional folder inside the binder, e.g. \"alex-taylor/2026-09\". Omit to read the whole container."
+                  },
+                  "file_urls": {
+                    "type": "array",
+                    "description": "Fallback when there is no binder: statement files by https URL. Each item is a URL string or {url, filename}. Only hosts on the server's allowlist; redirects refused. Long signed URLs are easy to truncate when pasted - prefer `binder`.",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "The https URL of the statement file."
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "url"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "filename": {
+                              "type": "string",
+                              "description": "Optional display name; otherwise taken from the URL path."
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "include_transactions": {
+                    "type": "boolean",
+                    "description": "Scripts only. If true, the response includes the full transactions array. Agents must omit this and use batch_id + classification_worklist."
+                  },
+                  "files": {
+                    "type": "array",
+                    "description": "Statement files inline. Only for callers that already hold the bytes, such as a script.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "filename",
+                        "content_base64"
+                      ],
+                      "properties": {
+                        "filename": {
+                          "type": "string"
+                        },
+                        "content_base64": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical transaction batch plus applicant provenance, document index, and conduct.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch_id": {
+                      "type": "string",
+                      "description": "Server-side id for this canonical batch. Pass it to compute_summary as `batch_id` INSTEAD of `canonical`. Null only if the batch could not be stored, in which case `batch_store_error` says why."
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "transaction_count": {
+                      "type": "integer",
+                      "description": "How many canonical rows were stored. Gate 1 uses this, not a transactions array."
+                    },
+                    "nonzero_amount_count": {
+                      "type": "integer"
+                    },
+                    "transactions_omitted": {
+                      "type": "boolean",
+                      "description": "true (default): rows are in batch_id only. Scripts may pass include_transactions=true to get the array."
+                    },
+                    "transactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "Omitted for agents. Do NOT classify row-by-row. Classify `classification_worklist` and pass `batch_id`."
+                    },
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "document_index": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "applicant": {
+                      "type": "object"
+                    },
+                    "classification_worklist": {
+                      "type": "array",
+                      "description": "CLASSIFY THIS, not `transactions`. One entry per merchant that needs a category, already excluding info rows and already collapsing repeat visits, sorted by total spend. Return one classification per entry, keyed by `merchant`.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "merchant": {
+                            "type": "string"
+                          },
+                          "occurrences": {
+                            "type": "integer"
+                          },
+                          "total_amount": {
+                            "type": "number"
+                          },
+                          "median_amount": {
+                            "type": "number"
+                          },
+                          "first_date": {
+                            "type": "string"
+                          },
+                          "last_date": {
+                            "type": "string"
+                          },
+                          "direction": {
+                            "type": "string"
+                          },
+                          "sample_description": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/compute_summary": {
+      "post": {
+        "operationId": "compute_summary",
+        "summary": "Compute Part 1-5 totals from a stored canonical batch plus model classifications. Pass `batch_id`, not `canonical`. Fortnightly uses amount * 26 / 12. Rent is always recommended living. POSREJ/info amount is 0.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "classifications"
+                ],
+                "properties": {
+                  "batch_id": {
+                    "type": "string",
+                    "description": "PREFERRED. The id returned by extract_and_normalize. The server loads that batch itself, so the rows never travel through you. A real binder's batch is hundreds of kilobytes and WILL be truncated mid-array if you try to resend it."
+                  },
+                  "canonical": {
+                    "type": "object",
+                    "description": "Fallback for scripts that already hold the batch in memory. Not for you: you cannot carry it without it being truncated. Use batch_id."
+                  },
+                  "classifications": {
+                    "type": "object",
+                    "description": "{assessment_date, classifications:[...]}. Each entry names either a `merchant` from classification_worklist (preferred - it covers every row of that merchant) or a `transaction_id` for a single exceptional row. A per-row entry overrides the merchant-level one."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Servicing summary. part4 is always present. part5.top_merchants use annual_spend, never raw observed spend labelled as annual.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryResponse",
+                  "properties": {
+                    "summary_id": {
+                      "type": "string",
+                      "description": "Server-side id for this summary. Pass it to render_report as `summary_id` INSTEAD of `summary`."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/render_report": {
+      "post": {
+        "operationId": "render_report",
+        "summary": "Write lender-assessment.xlsx from a stored compute_summary result and return a download URL. Pass `summary_id`, not `summary`. Give the returned download_url to the user.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "summary_id": {
+                    "type": "string",
+                    "description": "PREFERRED. The id returned by compute_summary. The server loads the summary itself, so its hundreds of rows never travel through you. Abbreviating the summary to make it fit produces a workbook missing most of its line items."
+                  },
+                  "summary": {
+                    "type": "object",
+                    "description": "Fallback for scripts holding the summary in memory. Not for you - use summary_id."
+                  },
+                  "applicant": {
+                    "type": "object"
+                  },
+                  "filename": {
+                    "type": "string",
+                    "description": "Optional output name. Defaults to lender-assessment.xlsx."
+                  },
+                  "include_base64": {
+                    "type": "boolean",
+                    "description": "Leave false. An agent cannot write bytes anywhere."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Download link for the rendered workbook",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "filename": {
+                      "type": "string"
+                    },
+                    "download_url": {
+                      "type": "string",
+                      "description": "Short-lived read link. Give this to the user verbatim."
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "size_bytes": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "functionsKey": {
+        "type": "apiKey",
+        "name": "x-functions-key",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "Applicant": {
+        "type": "object",
+        "description": "Printed holder fields only. Copy verbatim. If a field was not printed, it is Not provided in binder.",
+        "properties": {
+          "Full Name(s)": {
+            "type": "string"
+          },
+          "Age(s)": {
+            "type": "string"
+          },
+          "Dependants": {
+            "type": "string"
+          },
+          "Address and living situation": {
+            "type": "string"
+          }
+        }
+      },
+      "ConductCheck": {
+        "type": "object",
+        "properties": {
+          "identified": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Conduct": {
+        "type": "object",
+        "properties": {
+          "arrears_or_overdrawn": {
+            "$ref": "#/components/schemas/ConductCheck"
+          },
+          "late_dishonour_unarranged_fees": {
+            "$ref": "#/components/schemas/ConductCheck"
+          },
+          "limit_excess": {
+            "$ref": "#/components/schemas/ConductCheck"
+          },
+          "irregular_activity": {
+            "$ref": "#/components/schemas/ConductCheck"
+          }
+        }
+      },
+      "Account": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "description": "Internal id. Never show this as the customer-facing account label."
+          },
+          "account_label": {
+            "type": "string",
+            "description": "Printed or masked account identifier. Use this in the workbook."
+          },
+          "institution": {
+            "type": "string"
+          },
+          "account_type": {
+            "type": "string"
+          },
+          "period_start": {
+            "type": "string"
+          },
+          "period_end": {
+            "type": "string"
+          },
+          "days_covered": {
+            "type": "integer"
+          },
+          "days_old": {
+            "type": "integer"
+          },
+          "source_file": {
+            "type": "string"
+          },
+          "credit_limit": {
+            "type": "number"
+          },
+          "opening_balance": {
+            "type": "number"
+          },
+          "closing_balance": {
+            "type": "number"
+          },
+          "is_statement": {
+            "type": "boolean"
+          },
+          "reject_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "applicant": {
+            "$ref": "#/components/schemas/Applicant"
+          },
+          "conduct": {
+            "$ref": "#/components/schemas/Conduct"
+          }
+        }
+      },
+      "DocumentIndexRow": {
+        "type": "object",
+        "properties": {
+          "institution": {
+            "type": "string"
+          },
+          "account_id": {
+            "type": "string"
+          },
+          "account_label": {
+            "type": "string"
+          },
+          "account_type": {
+            "type": "string"
+          },
+          "period_start": {
+            "type": "string"
+          },
+          "period_end": {
+            "type": "string"
+          },
+          "days_covered": {
+            "type": "integer"
+          },
+          "days_old": {
+            "type": "integer"
+          },
+          "source_file": {
+            "type": "string"
+          },
+          "conduct": {
+            "$ref": "#/components/schemas/Conduct"
+          }
+        }
+      },
+      "ExtractResponse": {
+        "type": "object",
+        "properties": {
+          "assessment_date": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "file_count": {
+            "type": "integer"
+          },
+          "applicant": {
+            "$ref": "#/components/schemas/Applicant"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            }
+          },
+          "document_index": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentIndexRow"
+            }
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Part2Calculation": {
+        "type": "object",
+        "properties": {
+          "merchant": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "dates_observed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "average_amount": {
+            "type": "number"
+          },
+          "assessed_frequency": {
+            "type": "string"
+          },
+          "calculated_monthly_impact": {
+            "type": "number"
+          },
+          "calculation_basis": {
+            "type": "string"
+          }
+        }
+      },
+      "Part4Facility": {
+        "type": "object",
+        "properties": {
+          "institution": {
+            "type": "string"
+          },
+          "facility_type": {
+            "type": "string"
+          },
+          "account_label": {
+            "type": "string"
+          },
+          "credit_limit": {
+            "type": "number",
+            "nullable": true
+          },
+          "current_balance": {
+            "type": "number",
+            "nullable": true
+          },
+          "observed_repayment": {
+            "type": "number",
+            "nullable": true
+          },
+          "frequency": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        }
+      },
+      "Part5Merchant": {
+        "type": "object",
+        "properties": {
+          "merchant": {
+            "type": "string"
+          },
+          "annual_spend": {
+            "type": "number",
+            "description": "Annualised included living spend. Never treat raw observed spend as annual."
+          },
+          "category": {
+            "type": "string"
+          },
+          "calculation_basis": {
+            "type": "string"
+          }
+        }
+      },
+      "SummaryResponse": {
+        "type": "object",
+        "properties": {
+          "assessment_date": {
+            "type": "string"
+          },
+          "applicant": {
+            "$ref": "#/components/schemas/Applicant"
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            }
+          },
+          "document_index": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentIndexRow"
+            }
+          },
+          "account_conduct": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "income": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "part1": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "part2": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "part2_calculations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part2Calculation"
+            }
+          },
+          "part3": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "part4": {
+            "type": "array",
+            "description": "Always present. Empty only when liability_evidence_status is no liability evidence identified.",
+            "items": {
+              "$ref": "#/components/schemas/Part4Facility"
+            }
+          },
+          "liability_evidence_status": {
+            "type": "string"
+          },
+          "subtype_breakdowns": {
+            "type": "object",
+            "properties": {
+              "utilities": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "insurance": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "recommended_monthly_living": {
+            "type": "number"
+          },
+          "part5": {
+            "type": "object",
+            "properties": {
+              "top_merchants": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Part5Merchant"
+                }
+              },
+              "high_frequency": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "underwriter_notes": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "functionsKey": []
+    }
+  ]
+}

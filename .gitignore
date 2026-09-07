@@ -1,0 +1,22 @@
+# Secrets — never commit
+.env
+.env.*
+local.settings.json
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Generated artefacts (regenerate with fixtures/generate_fixtures.py and templates/build_excel.py)
+fixtures/samples/
+*.xlsx
+*.png
+out/

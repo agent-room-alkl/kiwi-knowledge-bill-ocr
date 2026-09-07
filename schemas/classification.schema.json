@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vikas.local/schemas/classification.schema.json",
+  "title": "LenderServicingClassificationBatch",
+  "description": "Structured output for classifying extracted bank/credit-card transactions. The model assigns category, inclusion, and rationale only. Totals, frequency conversion, and statement-age math are computed in code.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assessment_date", "classifications"],
+  "properties": {
+    "assessment_date": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO date used as 'current date' for statement-age. Caller-supplied; default today."
+    },
+    "classifications": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/classification" }
+    }
+  },
+  "$defs": {
+    "category": {
+      "type": "string",
+      "enum": [
+        "transport",
+        "utilities",
+        "insurance",
+        "food_grocery_clothing_personal_care",
+        "recreation_entertainment",
+        "monthly_subscriptions",
+        "education",
+        "kiwisaver_savings_investments",
+        "childcare_child_support",
+        "donations_tithings",
+        "rent_board_paid",
+        "medical",
+        "extracurricular",
+        "other",
+        "one_off",
+        "internal_transfer",
+        "credit_card_repayment",
+        "loan_repayment",
+        "mortgage_repayment",
+        "interest_charge",
+        "redraw",
+        "income_credit",
+        "reimbursement",
+        "salary_wages",
+        "benefit",
+        "child_support_received",
+        "rental_income",
+        "investment_income",
+        "other_income",
+        "underwriter_manual",
+        "unclear"
+      ]
+    },
+    "insurance_type": {
+      "type": "string",
+      "enum": [
+        "home_contents",
+        "vehicle",
+        "life_personal_risk",
+        "medical_health",
+        "pet",
+        "funeral",
+        "other_insurance"
+      ]
+    },
+    "utility_type": {
+      "type": "string",
+      "enum": [
+        "power",
+        "water",
+        "gas",
+        "internet",
+        "phone_mobile",
+        "other_utility"
+      ]
+    },
+    "frequency": {
+      "type": "string",
+      "enum": [
+        "weekly",
+        "fortnightly",
+        "monthly",
+        "quarterly",
+        "annual",
+        "irregular",
+        "one_off",
+        "unknown"
+      ]
+    },
+    "income_type": {
+      "type": "string",
+      "enum": [
+        "salary_wages",
+        "benefit",
+        "child_support_received",
+        "rental_income",
+        "investment_income",
+        "other_income"
+      ]
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transaction_id",
+        "category",
+        "include_in_living_expenses",
+        "confidence",
+        "reason"
+      ],
+      "properties": {
+        "transaction_id": {
+          "type": "string",
+          "description": "Stable id from the extract/normalize layer. Must match a canonical row."
+        },
+        "category": { "$ref": "#/$defs/category" },
+        "include_in_living_expenses": {
+          "type": "boolean",
+          "description": "Must be false for exclusions, income, one_off, underwriter_manual, unclear."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400,
+          "description": "Short assessor-readable rationale. No arithmetic."
+        },
+        "suggested_frequency": { "$ref": "#/$defs/frequency" },
+        "insurance_type": { "$ref": "#/$defs/insurance_type" },
+        "utility_type": { "$ref": "#/$defs/utility_type" },
+        "income_type": { "$ref": "#/$defs/income_type" },
+        "merchant_normalized": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Optional hint. Calc engine is authoritative for Part 5 grouping."
+        },
+        "is_business": {
+          "type": "string",
+          "enum": ["yes", "no", "review"],
+          "description": "Whether this spend is for earning income or running a trade. The calc engine excludes from recommended living only when this is yes. Absent defaults to no. Not inferred from merchant names."
+        },
+        "business_reason": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Short criterion (premises lease, advertising, trade software, wholesale stock, no other business signal). No brand list. No arithmetic."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "category": { "const": "insurance" } },
+            "required": ["category"]
+          },
+          "then": { "required": ["insurance_type"] }
+        },
+        {
+          "if": {
+            "properties": { "category": { "const": "utilities" } },
+            "required": ["category"]
+          },
+          "then": { "required": ["utility_type"] }
+        }
+      ]
+    }
+  }
+}

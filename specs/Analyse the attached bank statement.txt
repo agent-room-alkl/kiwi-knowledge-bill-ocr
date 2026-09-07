@@ -1,0 +1,303 @@
+Analyse the attached bank statements and prepare a lender-ready assessment summary
+
+---
+
+ 
+
+# SECTION 1: APPLICANT PROFILE & BINDER INDEX
+
+ 
+
+## 1.1 Applicant Details
+
+Extract and summarize:
+
+* **Full Name(s):**
+
+* **Age(s):** (If not stated in binder, explicitly write "Not provided in binder")
+
+* **Dependants:** (Number and ages, or "None identified")
+
+* **Current Residential Address & Living Situation:** (e.g., Renting, Boarding, Homeowner)
+
+ 
+
+## 1.2 Linked Accounts Inventory
+
+Identify and list all bank accounts, credit facilities, and loans associated with the primary applicants found in the binder.
+
+ 
+
+Give a Tabular Summary of Each Bank Account Statement and the period of the same. Also verify the Number of days the Statement is provided for and how many days Old it is from current date 
+
+ 
+
+## 1.3 Document Index & Account Conduct Summary
+
+List every document present in the binder (grouping all bank statements for the same account in chronological order). For each account statement provided, include an **Account Conduct Assessment** noting:
+
+* Arrears or overdrawn instances
+
+* Late payment fees, dishonors, or unarranged overdraft fees
+
+* Limit excesses or irregular activity
+
+ 
+
+---
+
+ 
+
+# SECTION 2: EXPENSE CATEGORIZATION & CALCULATION RULES
+
+ 
+
+Analyze all statement transactions against the exact categories below.
+
+ 
+
+### Expense Categories & Specific Rules
+
+ 
+
+1. **Transport** (Fuel, Vehicle Registration, WOF, Parking, Public Transit)
+
+2. **Utilities**
+
+  * *Rule:* Calculate a **monthly average** for each utility type based on its nature and billing frequency (e.g., Power, Water, Gas, Internet/Wi-Fi, Phone/Mobile). Show explicit calculation steps for assessor understanding, then sum these calculations into a single **Utility Expenses** total.
+
+3. **Insurance (Unified Master Heading)**
+
+  * *Rule:* Group ALL insurance expenses under this single section, then bifurcate/itemize by policy type:
+
+    * Home & Contents Insurance
+
+    * Vehicle / Car Insurance
+
+    * Life & Personal Risk Insurance
+
+    * Medical / Health Insurance
+
+    * Pet Insurance
+
+    * Funeral Insurance
+
+4. **Food, Grocery, Clothing & Personal Care** (Essential groceries, basic toiletries, essential clothing)
+
+5. **Recreation & Entertainment**
+
+  * *Rule:* Calculate an **average monthly cost** based on discretionary spend. Include:
+
+    * Shopping (non-essential retail, fashion, gadgets; excluding essential groceries/personal care)
+
+    * Dining out, cafes, takeaways, and bars
+
+    * Domestic travel & local trips (strictly excluding major or international trips)
+
+6. **Monthly Subscriptions**
+
+  * *Rule:* Separate all recurring digital and non-digital subscriptions into this standalone category. Examples: Gym memberships, gaming services, streaming/OTT platforms (Netflix, Spotify, YouTube, Amazon, Patreon, Google Storage, Apple services).
+
+  * *Required Breakdown:* Perform and display explicit calculations based on payment frequency (weekly, fortnightly, monthly, annual) for full assessor understanding.
+
+7. **Education** (Public & Private tuition, school fees, uniforms)
+
+8. **KiwiSaver & Savings / Investments**
+
+9. **Childcare & Child Support**
+
+10. **Donations / Tithings**
+
+11. **Rent / Board Paid**
+
+12. **Medical Expenses** (Doctors, pharmacy, dental)
+
+13. **Extracurricular Activities** (Includes all sports activities, clubs, lessons)
+
+14. **Other Expenses** (Any recurring expense that cannot reasonably fit within the categories above)
+
+15. **One-Off Expenses** (All non-recurring, unusual, or extraordinary items, including major/international travel)
+
+ 
+
+*(Note: Council Rates are intentionally excluded from automated calculations and will be assessed manually by the underwriter.)*
+
+ 
+
+---
+
+ 
+
+### Strict Accounting Rules
+
+1. **No Grouping as "Various":** Every single transaction must be itemized individually with its exact date and amount. Do not group multiple grocery, fuel, dining, or retail transactions into aggregate entries.
+
+2. **Exclusions from Living Expenses:** Strictly EXCLUDE the following from regular monthly living expenses:
+
+  * Internal transfers between applicant accounts
+
+  * Credit card repayments
+
+  * Loan repayments & Mortgage repayments
+
+  * Interest charges
+
+  * Redraws
+
+  * Income credits & Reimbursements
+
+3. **Payment Frequency Identification:** Determine frequency pattern for recurring items (Weekly, Fortnightly, Monthly, Quarterly, Annual). Convert to Monthly Equivalent using standard formulas:
+
+  * **Weekly:** $Amount \times 52 / 12$
+
+  * **Fortnightly:** $Amount \times 26 / 12$
+
+  * **Quarterly:** $Amount / 3$
+
+  * **Annual:** $Amount / 12$
+
+4. **One-Off Items:** Place all extraordinary or non-recurring items in the **One-Off Expenses** section with a clear reason for exclusion. Do not include these in regular monthly living expense calculations.
+
+ 
+
+---
+
+ 
+
+# SECTION 3: REQUIRED OUTPUT FORMAT
+
+ 
+
+Present the final output strictly in the following 5-part order:
+
+ 
+
+## Part 1: Applicant Expense Summary
+
+Provide a high-level summary table of all monthly-equivalent recurring expenses by category, followed by key totals:
+
+ 
+
+| Category | Monthly Equivalent ($) | Notes / Calculation Basis |
+
+|:---|---:|:---|
+
+| Transport | $[Amount] | |
+
+| Utilities | $[Amount] | [Sum of Power, Water, Gas, Internet, Phone monthly averages] |
+
+| Insurance (Combined) | $[Amount] | [Bifurcated: Car, Home, Life, Medical, Pet, etc.] |
+
+| Food, Grocery, Clothing & Personal Care | $[Amount] | |
+
+| Recreation & Entertainment | $[Amount] | [Averaged shopping, dining out, local travel] |
+
+| Monthly Subscriptions | $[Amount] | [Itemized digital/non-digital subscriptions with frequencies] |
+
+| Education | $[Amount] | |
+
+| KiwiSaver & Savings / Investments | $[Amount] | |
+
+| Childcare & Child Support | $[Amount] | |
+
+| Donations / Tithings | $[Amount] | |
+
+| Rent / Board Paid | $[Amount] | |
+
+| Medical Expenses | $[Amount] | |
+
+| Extracurricular Activities | $[Amount] | |
+
+| Other Expenses | $[Amount] | |
+
+| **TOTAL RECOMMENDED MONTHLY LIVING EXPENSES** | **$[Total]** | |
+
+ 
+
+* **Total Recurring Monthly Expenses by Category:** $[Total]
+
+* **Total One-Off Expenses Excluded:** $[Total]
+
+* **Total Monthly Living Expenses Recommended for Servicing:** $[Total]
+
+ 
+
+---
+
+ 
+
+## Part 2: Regular Expenses (Categorized Line Items)
+
+For **every** category containing transactions, present:
+
+ 
+
+1. **Transaction Table:**
+
+| Date | Description | Amount ($) | Frequency Pattern | Include |
+
+|:---|:---|---:|:---|:---|
+
+ 
+
+2. **Frequency Assessment & Calculation Table:**
+
+*(Explicitly display frequency conversions for Subscriptions, and monthly average calculations for Utilities and Recreation/Entertainment)*
+
+| Merchant | Dates Observed | Average Amount ($) | Assessment / Frequency | Calculated Monthly Impact ($) |
+
+|:---|:---|---:|:---|---:|
+
+ 
+
+---
+
+ 
+
+## Part 3: One-Off Expenses
+
+| Date | Description | Amount ($) | Reason Excluded |
+
+|:---|:---|---:|:---|
+
+ 
+
+---
+
+ 
+
+## Part 4: Existing Liabilities
+
+List all active debt facilities identified across statements:
+
+* Home loans
+
+* Personal loans
+
+* Credit cards
+
+* Hire purchase
+
+* BNPL facilities
+
+ 
+
+| Institution / Lender | Facility Type | Credit Limit ($) | Current Balance ($) | Observed Repayment ($) | Frequency |
+
+|:---|:---|---:|---:|---:|:---|
+
+ 
+
+---
+
+ 
+
+## Part 5: Assessor Commentary
+
+Provide credit analysis commentary addressing file quality and risk factors:
+
+* **Top 10 Recurring Merchants by Annual Spend:** (Table with Merchant Name, Annual Spend, and Category)
+
+* **High-Frequency Merchants:** (List any merchant appearing 3 or more times across the statement period)
+
+* **Underwriter Audit Notes:** Highlights of any undisclosed liabilities, discretionary spending patterns, or account conduct issues requiring file sign-off.

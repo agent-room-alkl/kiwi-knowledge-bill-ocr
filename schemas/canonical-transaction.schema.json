@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vikas.local/schemas/canonical-transaction.schema.json",
+  "title": "CanonicalTransactionBatch",
+  "description": "Output of extract + normalize. One row per statement line. LLM does not produce this.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assessment_date", "accounts", "transactions"],
+  "properties": {
+    "assessment_date": { "type": "string", "format": "date" },
+    "accounts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/account" }
+    },
+    "transactions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/transaction" }
+    }
+  },
+  "$defs": {
+    "account_type": {
+      "type": "string",
+      "enum": ["everyday", "savings", "credit_card", "loan", "other"]
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["inflow", "outflow", "info"]
+    },
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "account_id",
+        "institution",
+        "account_type",
+        "period_start",
+        "period_end",
+        "source_file"
+      ],
+      "properties": {
+        "account_id": { "type": "string" },
+        "institution": { "type": "string" },
+        "account_label": { "type": "string" },
+        "account_type": { "$ref": "#/$defs/account_type" },
+        "period_start": { "type": "string", "format": "date" },
+        "period_end": { "type": "string", "format": "date" },
+        "days_covered": { "type": "integer" },
+        "days_old": { "type": "integer" },
+        "opening_balance": { "type": ["number", "null"] },
+        "closing_balance": { "type": ["number", "null"] },
+        "credit_limit": { "type": ["number", "null"] },
+        "source_file": { "type": "string" },
+        "is_statement": { "type": "boolean" },
+        "reject_reason": { "type": ["string", "null"] }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transaction_id",
+        "account_id",
+        "date",
+        "description",
+        "amount",
+        "direction",
+        "source_file"
+      ],
+      "properties": {
+        "transaction_id": { "type": "string" },
+        "account_id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "process_date": { "type": ["string", "null"], "format": "date" },
+        "description": { "type": "string" },
+        "merchant_normalized": { "type": "string" },
+        "amount": {
+          "type": "number",
+          "description": "Always positive. Sign is direction."
+        },
+        "direction": { "$ref": "#/$defs/direction" },
+        "balance": { "type": ["number", "null"] },
+        "raw_amount_text": { "type": "string" },
+        "raw_anchor": { "type": "string" },
+        "source_file": { "type": "string" }
+      }
+    }
+  }
+}
