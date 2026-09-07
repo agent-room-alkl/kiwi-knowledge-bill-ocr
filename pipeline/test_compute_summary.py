@@ -916,6 +916,20 @@ def test_evidence_gaps_survive_a_malformed_transaction_date():
     assert "1 remittance(s)" in offshore["note"], offshore["note"]
 
 
+def test_evidence_gaps_note_appears_exactly_once():
+    """One finding, one line.
+
+    The merge that brought T-04's gap checks onto the T-02 branch left the
+    Evidence gaps underwriter note being appended twice, so Part 5 showed the
+    same sign-off item in two places. An underwriter reading two identical
+    lines has to work out whether they are two findings.
+    """
+
+    out = compute_summary(*_rent_only_binder())
+    topics = [n["topic"] for n in out["part5"]["underwriter_notes"]]
+    assert topics.count("Evidence gaps") == 1, topics
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -944,6 +958,7 @@ if __name__ == "__main__":
         test_evidence_gap_skips_banks_already_in_the_binder,
         test_evidence_gaps_stay_quiet_when_the_binder_answers_them,
         test_evidence_gaps_survive_a_malformed_transaction_date,
+        test_evidence_gaps_note_appears_exactly_once,
     ]
     for fn in tests:
         fn()

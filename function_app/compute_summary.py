@@ -1216,18 +1216,6 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "requires_signoff": True,
             }
         )
-    underwriter_notes.append(
-        {
-            "topic": "Evidence gaps",
-            "note": (
-                f"{len(gaps)} evidence gap(s) detected - see the Evidence gaps block: "
-                + "; ".join(g["topic"] for g in gaps)
-                if gaps
-                else "No evidence gaps detected by the automated checks."
-            ),
-            "requires_signoff": bool(gaps),
-        }
-    )
     unclear_in = [r for r in joined if r["category"] == "unclear" and r.get("direction") == "inflow"]
     unclear_out = [r for r in joined if r["category"] == "unclear" and r.get("direction") == "outflow"]
     if unclear_in or unclear_out:
