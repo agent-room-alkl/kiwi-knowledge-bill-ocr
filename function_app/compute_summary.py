@@ -408,6 +408,52 @@ def effective_include(category: str, direction: str, model_include: bool) -> boo
     return bool(model_include) and category in RECOMMENDED
 
 
+# How a statement writes a person's name is not how the classifier writes it.
+# The same payer arrives as "MISS Y ZHANG a", "Direct Credit MISS Y ZHANG" and
+# "Bill Payment ZHANG RUOYU"; the model claims one spelling and the engine's
+# exact-match join drops the rest as unclassified. This key is used ONLY to
+# match a classification to a row - never to group amounts - so widening it
+# cannot move a total.
+_JOIN_PREFIXES = (
+    "DIRECT CREDIT", "DIRECT DEBIT", "BILL PAYMENT", "TRANSFER TO",
+    "TRANSFER FROM", "TFR TO", "TFR FROM", "POS W/D", "ATM W/D",
+    "PAY", "FROM", "TFR",
+)
+_JOIN_SUFFIXES = ("BILL PAYMENT", "DIRECT CREDIT", "DIRECT DEBIT")
+
+
+def merchant_join_key(raw: Any) -> str:
+    """Match key for one payer, however the statement spelled them."""
+    text = " ".join(str(raw or "").split())
+    if not text:
+        return ""
+    # Transport wrappers first, keeping the original casing: the alias rule
+    # below needs to see which words the statement actually lower-cased.
+    changed = True
+    while changed:
+        changed = False
+        upper = text.upper()
+        for prefix in _JOIN_PREFIXES:
+            if upper.startswith(prefix + " ") and len(text) > len(prefix) + 1:
+                text = text[len(prefix) + 1:].strip()
+                changed = True
+                break
+        if changed:
+            continue
+        for suffix in _JOIN_SUFFIXES:
+            if upper.endswith(" " + suffix) and len(text) > len(suffix) + 1:
+                text = text[: -(len(suffix) + 1)].strip()
+                changed = True
+                break
+    # A trailing all-lowercase word is the payer's own reference, not part of
+    # the name: "MISS Y ZHANG a". Only drop it when at least two words of name
+    # remain, so "PAY Xiuyuan zhang" keeps its surname.
+    parts = text.split(" ")
+    if len(parts) >= 3 and parts[-1].islower() and len(parts[-1]) <= 15:
+        parts = parts[:-1]
+    return " ".join(" ".join(parts).upper().split())
+
+
 def _index_classifications(
     batch: dict[str, Any], txns: list[dict[str, Any]] | None = None
 ) -> dict[str, dict[str, Any]]:
@@ -432,16 +478,21 @@ def _index_classifications(
 
     by_merchant: dict[str, list[str]] = defaultdict(list)
     for txn in txns or []:
-        key = str(txn.get("merchant_normalized") or "").upper().strip()
-        if key:
-            by_merchant[key].append(txn["transaction_id"])
+        for key in {
+            str(txn.get("merchant_normalized") or "").upper().strip(),
+            merchant_join_key(txn.get("merchant_normalized")),
+            merchant_join_key(txn.get("description")),
+        }:
+            if key:
+                by_merchant[key].append(txn["transaction_id"])
 
     rows = batch.get("classifications") or []
     for row in rows:
-        merchant = str(row.get("merchant") or "").upper().strip()
-        if merchant and not row.get("transaction_id"):
-            for txn_id in by_merchant.get(merchant, ()):
-                out[txn_id] = row
+        raw = str(row.get("merchant") or "").strip()
+        if raw and not row.get("transaction_id"):
+            for key in {raw.upper(), merchant_join_key(raw)}:
+                for txn_id in by_merchant.get(key, ()):
+                    out[txn_id] = row
     for row in rows:
         if row.get("transaction_id"):
             out[row["transaction_id"]] = row

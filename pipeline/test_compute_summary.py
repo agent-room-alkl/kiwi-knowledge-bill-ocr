@@ -1164,6 +1164,101 @@ def test_business_receipts_are_their_own_category_not_unclear():
     assert len(side) == 1 and side[0]["amount_observed"] == 1400
 
 
+def test_one_payer_many_spellings_joins_to_one_classification():
+    """The statement spells a payer four ways; the model claims one.
+
+    "MISS Y ZHANG a", "Direct Credit MISS Y ZHANG" and "MISS Y ZHANG BILL
+    PAYMENT" are one person. Exact-match keying claimed the first and left
+    the rest as "no classification joined" - 145 rows on this applicant's
+    file. The wider key is used only to attach a classification to a row.
+    """
+
+    from pipeline.compute_summary import merchant_join_key
+
+    assert merchant_join_key("MISS Y ZHANG a") == "MISS Y ZHANG"
+    assert merchant_join_key("Direct Credit MISS Y ZHANG") == "MISS Y ZHANG"
+    assert merchant_join_key("MISS Y ZHANG BILL PAYMENT") == "MISS Y ZHANG"
+    # A surname the statement happened to lower-case is not an alias.
+    assert merchant_join_key("PAY Xiuyuan zhang") == "XIUYUAN ZHANG"
+
+    txns, cls = [], []
+    spellings = [
+        "MISS Y ZHANG a",
+        "Direct Credit MISS Y ZHANG",
+        "MISS Y ZHANG BILL PAYMENT",
+        "MISS Y ZHANG a",
+    ]
+    for i, desc in enumerate(spellings):
+        txns.append(_txn(f"z{i}", f"2026-06-{i + 4:02d}", desc, 40, "inflow", desc))
+        # No per-row classification: only the merchant-level one below.
+    cls.append({
+        "merchant": "MISS Y ZHANG a",
+        "category": "business_receipts",
+        "include_in_living_expenses": False,
+        "confidence": 0.9,
+        "reason": "side-business gross receipts, not net profit",
+        "suggested_frequency": "irregular",
+        "is_business": "yes",
+    })
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert out["audit"]["join_miss_rows"] == 0, [
+        (r["description"], r["exclusion_reason"]) for r in out["part2"]
+    ]
+    assert all(
+        r["category"] == "business_receipts"
+        for r in out["part2"]
+        if "ZHANG" in r["description"].upper()
+    )
+
+
+def test_different_people_are_not_merged_by_the_join_key():
+    """Two payers who share a surname stay two payers."""
+
+    from pipeline.compute_summary import merchant_join_key
+
+    assert merchant_join_key("ZHANG,MENG Menglich") != merchant_join_key("ZHANG,FAN BILL PAYMENT")
+    assert merchant_join_key("FROM J ZHANG") != merchant_join_key("Direct Credit MISS Y ZHANG")
+
+    txns = [
+        _txn("a1", "2026-06-04", "ZHANG,MENG Menglich", 60, "inflow", "ZHANG,MENG Menglich"),
+        _txn("b1", "2026-06-05", "ZHANG,FAN BILL PAYMENT", 40, "inflow", "ZHANG,FAN BILL PAYMENT"),
+    ]
+    cls = [{
+        "merchant": "ZHANG,MENG Menglich",
+        "category": "business_receipts",
+        "include_in_living_expenses": False,
+        "confidence": 0.9,
+        "reason": "side-business gross receipts, not net profit",
+        "suggested_frequency": "irregular",
+    }]
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    by_desc = {r["description"]: r for r in out["part2"]}
+    assert by_desc["ZHANG,MENG Menglich"]["category"] == "business_receipts"
+    assert by_desc["ZHANG,FAN BILL PAYMENT"]["category"] == "unclear"
+    assert by_desc["ZHANG,FAN BILL PAYMENT"]["exclusion_reason"] == "no classification joined"
+
+
+def test_the_wider_join_key_moves_no_money():
+    """Same input, same totals - the key only decides what gets a label."""
+
+    txns, cls = [], []
+    for i, desc in enumerate(["MISS Y ZHANG a", "Direct Credit MISS Y ZHANG"]):
+        txns.append(_txn(f"z{i}", f"2026-06-{i + 4:02d}", desc, 40, "inflow", desc))
+    control = compute_summary(*_rent_only_binder(txns, cls))
+    cls.append({
+        "merchant": "MISS Y ZHANG",
+        "category": "business_receipts",
+        "include_in_living_expenses": False,
+        "confidence": 0.9,
+        "reason": "side-business gross receipts, not net profit",
+        "suggested_frequency": "irregular",
+    })
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert out["audit"]["rent_monthly"] == control["audit"]["rent_monthly"] == 2400
+    assert out["recommended_monthly_living"] == control["recommended_monthly_living"]
+    assert out["audit"]["join_miss_rows"] == 0 and control["audit"]["join_miss_rows"] == 2
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1202,6 +1297,9 @@ if __name__ == "__main__":
         test_no_side_business_line_when_there_is_no_trading_shape,
         test_audit_counts_join_misses_not_classification_objects,
         test_business_receipts_are_their_own_category_not_unclear,
+        test_one_payer_many_spellings_joins_to_one_classification,
+        test_different_people_are_not_merged_by_the_join_key,
+        test_the_wider_join_key_moves_no_money,
     ]
     for fn in tests:
         fn()
