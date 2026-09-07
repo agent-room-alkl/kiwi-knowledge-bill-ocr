@@ -132,6 +132,26 @@ def test_conversion_lines_are_classified_by_their_merchant():
         assert "OPENAI" in text.upper(), name
 
 
+def test_cash_is_counted_as_living_and_processors_are_trade():
+    """Two rules whose absence pushed the assessment the applicant's way.
+
+    Unexplained cash left as `unclear` drops out of every total, so the file
+    reads cheaper to run than it is. GoCardless drifted between business and
+    unclear across runs; naming it stops the drift.
+    """
+    for name in (
+        "PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt",
+        "prompt-foundry-v2.md",
+        "agent-instructions.md",
+        "prompt-foundry-xlsx-now.md",
+    ):
+        text = " ".join((ROOT / "foundry" / name).read_text(encoding="utf-8").split())
+        assert "cash withdrawal - purpose not printed, counted as living expense" in text, name
+        assert "GoCardless" in text, name
+        # The honest-unclear escape hatch must survive both rules.
+        assert "unclear" in text, name
+
+
 if __name__ == "__main__":
     test_side_business_receipts_are_not_salary_or_living()
     print("ok test_side_business_receipts_are_not_salary_or_living")
@@ -147,4 +167,6 @@ if __name__ == "__main__":
     print("ok test_repair_passes_send_only_the_new_entries")
     test_conversion_lines_are_classified_by_their_merchant()
     print("ok test_conversion_lines_are_classified_by_their_merchant")
+    test_cash_is_counted_as_living_and_processors_are_trade()
+    print("ok test_cash_is_counted_as_living_and_processors_are_trade")
     print("ALL PASS")

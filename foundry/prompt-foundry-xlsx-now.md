@@ -156,6 +156,9 @@ Hard classification rules:
 - Repeated small inflows from many personal names (bun / egg / food-sale notes) → `business_receipts`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `unclear` (that means the file could not tell; you could). Never `salary_wages` or `other_income` (those enter Part 1.4 Income as assessable). Never recommended living.
 - Wholesale / catering stock (trade wholesaler / Foodstuffs catering channel) → `is_business` yes, include false, COGS — not household grocery when bun/egg sales also appear.
 - Workspace lease, advertising, trade processor fees, professional software → `is_business` yes, include false.
+- GoCardless / Stripe / Square / PayPal merchant fees are trade processor charges, not household spend; a fixed amount repeating monthly is a trade subscription, not `unclear`.
+- `ATM W/D` and merchant-less `POS W/D` cash → living expense, include **true**, reason `cash withdrawal - purpose not printed, counted as living expense`. Never `unclear`: dropping it flatters the applicant.
+- A descriptor that names nothing stays `unclear`, with a reason saying what is missing.
 - A `USD @ conversion rate` line IS a purchase: the merchant is appended from the international-transaction-fee row (`... conversion rate OPENAI OPENAI.COM CA`). Classify by that merchant, as you would the same merchant in NZD. Only a conversion line with no merchant at all stays `unclear`, reason `foreign currency conversion line item, merchant not printed`.
 - `unclear` is required when confidence is below 0.60; include the reason in Part 5.
 

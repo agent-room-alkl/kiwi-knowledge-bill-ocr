@@ -112,7 +112,25 @@ channel) → `is_business` yes, include false, `wholesale stock / COGS`.
 If bun/egg sales also appear, do not leave these as `review`.
 
 Workspace lease, advertising, trade payment-processor fees, and
-professional/trade software → `is_business` yes, include false.
+professional/trade software → `is_business` yes, include false. **Name the
+processors:** GoCardless, Stripe, Square, PayPal *merchant* fees are trade
+processor charges, not household spending — a fixed amount repeating on the
+same day each month is a trade subscription, so do not leave it `unclear`
+because the payee is a processor rather than a shop.
+
+**Cash out is living expense, not unknown spend.** `ATM W/D`, `POS W/D` with
+no merchant, over-the-counter withdrawals: the statement cannot say what the
+cash bought, and that is exactly why it must be counted. Classify as
+`food_grocery_clothing_personal_care` (or `other` if the file gives a better
+steer), `include_in_living_expenses` **true**, reason `cash withdrawal -
+purpose not printed, counted as living expense`. Leaving it `unclear` drops
+it out of every total and makes the applicant look cheaper to run than they
+are; a lender reads unexplained cash as spending until shown otherwise.
+
+**A descriptor that genuinely names nothing stays `unclear`** with a reason
+that says what is missing — a truncated shop name, a bare PayPal reference, a
+company whose trade you cannot tell. Three honest `unclear` rows are worth
+more than thirty guesses.
 
 **A conversion-rate line IS a purchase — classify it by its merchant.**
 `POS W/D 23.00USD @ 0.5922 conversion rate OPENAI OPENAI.COM CA` is an
