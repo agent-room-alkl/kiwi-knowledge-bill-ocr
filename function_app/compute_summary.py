@@ -1301,8 +1301,13 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
     # The model answered is_business on every row and never once said yes,
     # while leaving some rows unresolved. "Nothing was found" and "some rows
     # could not be decided" print the same $0 in Part 1, so say which it is.
-    business_yes = sum(1 for r in joined if r.get("is_business") == "yes")
-    business_review = sum(1 for r in joined if r.get("is_business") == "review")
+    # Outflows only, to match BUSINESS EXPENSES itself: business_monthly sums
+    # spending. Side-business *receipts* are flagged is_business too, and
+    # counting those as evidence that business spend was assessed would
+    # silence this note in exactly the file that needs it.
+    _spend = [r for r in joined if r.get("direction") == "outflow"]
+    business_yes = sum(1 for r in _spend if r.get("is_business") == "yes")
+    business_review = sum(1 for r in _spend if r.get("is_business") == "review")
     if not business_classification_missing and business_yes == 0 and business_review:
         underwriter_notes.insert(
             0,

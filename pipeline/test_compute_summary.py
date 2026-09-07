@@ -1031,6 +1031,32 @@ def test_trading_turnover_uses_the_span_not_the_sum_of_statement_days():
     assert "238" not in gap["note"], gap["note"]
 
 
+def test_business_receipts_do_not_silence_the_unresolved_spend_note():
+    """Tagging income as business must not count as assessing business spend.
+
+    The classifier marks side-business receipts is_business=yes. Counting
+    those would make the file look as though business spend had been
+    assessed, and the note would go quiet on exactly the binder that needs
+    it - a side business whose costs are still sitting in living expenses.
+    """
+
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off", is_business="yes"))
+    txns.append(_txn("s1", "2026-06-15", "IWG NEW ZEALAND", 616.4, "outflow", "IWG NEW ZEALAND"))
+    cls.append(_cls("s1", "monthly_subscriptions", True, "monthly", is_business="review"))
+
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    note = next(
+        (n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Business spend not resolved"),
+        None,
+    )
+    assert note is not None, [n["topic"] for n in out["part5"]["underwriter_notes"]]
+    assert "1 row(s) came back unresolved" in note["note"], note["note"]
+    assert out["business_monthly"] == 0
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1064,6 +1090,7 @@ if __name__ == "__main__":
         test_one_regular_payer_is_not_a_business,
         test_trading_turnover_uses_the_span_not_the_sum_of_statement_days,
         test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero,
+        test_business_receipts_do_not_silence_the_unresolved_spend_note,
     ]
     for fn in tests:
         fn()
