@@ -1003,6 +1003,34 @@ def test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero():
     )
 
 
+def test_trading_turnover_uses_the_span_not_the_sum_of_statement_days():
+    """Overlapping statements must not stretch the window and shrink the rate.
+
+    ANZ 61 days sitting inside Kiwibank 92 days is a three-month file, not a
+    five-month one. Summing days_covered divided this applicant's turnover by
+    5.03 instead of 3.02 and reported 1,310/month for what is 2,180/month -
+    an error that made the side business look smaller than it is.
+    """
+
+    accounts = [
+        {"account_id": "a1", "institution": "Kiwibank", "period_start": "2026-05-20",
+         "period_end": "2026-08-19", "days_covered": 92},
+        {"account_id": "a2", "institution": "ANZ", "period_start": "2026-06-20",
+         "period_end": "2026-08-19", "days_covered": 61},
+    ]
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i}", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off"))
+    out = compute_summary(*_rent_only_binder(txns, cls, accounts=accounts))
+    gap = next(g for g in out["part5"]["evidence_gaps"]
+               if g["topic"] == "Unassessed receipts - possible trading income")
+    # 1,200 over the 92-day span is 397.00/month; over a summed 153 days it
+    # would read 238.75 and understate the business by a third.
+    assert "397.00/month" in gap["note"], gap["note"]
+    assert "238" not in gap["note"], gap["note"]
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1034,6 +1062,7 @@ if __name__ == "__main__":
         test_evidence_gaps_note_appears_exactly_once,
         test_many_small_credits_from_many_payers_are_flagged_as_possible_trading,
         test_one_regular_payer_is_not_a_business,
+        test_trading_turnover_uses_the_span_not_the_sum_of_statement_days,
         test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero,
     ]
     for fn in tests:

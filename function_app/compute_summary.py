@@ -573,6 +573,28 @@ SIDE_INCOME_MIN_CREDITS = 10
 SIDE_INCOME_MIN_PAYERS = 5
 
 
+def _observation_months(accounts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> float:
+    """Months the file actually observes: earliest start to latest end."""
+    starts, ends = [], []
+    for a in accounts:
+        try:
+            starts.append(parse_date(a.get("period_start")))
+            ends.append(parse_date(a.get("period_end")))
+        except (ValueError, TypeError):
+            continue
+    if starts and ends:
+        return max(_months_between(min(starts), max(ends)), 1.0)
+    dates = []
+    for r in rows:
+        try:
+            dates.append(parse_date(r.get("date")))
+        except (ValueError, TypeError):
+            continue
+    if dates:
+        return max(_months_between(min(dates), max(dates)), 1.0)
+    return 1.0
+
+
 def _row_blob(row: dict[str, Any]) -> str:
     return f"{row.get('description') or ''} {row.get('merchant_normalized') or ''}".upper()
 
@@ -706,7 +728,11 @@ def evidence_gaps(
     payers.discard("")
     if len(credits) >= SIDE_INCOME_MIN_CREDITS and len(payers) >= SIDE_INCOME_MIN_PAYERS:
         total = sum(abs(float(r.get("amount") or 0)) for r in credits)
-        months = max(sum(int(a.get("days_covered") or 0) for a in accounts) / 30.44, 1.0)
+        # The window is the span the statements cover together, not the sum of
+        # their day counts. Two overlapping statements - 61 days inside 92 -
+        # sum to 153 and would divide a three-month turnover by five, which
+        # understates the business and flatters the applicant.
+        months = _observation_months(accounts, credits)
         gaps.append(_gap(
             "Unassessed receipts - possible trading income",
             f"{len(credits)} credit(s) totalling {total:.2f} ({total / months:.2f}/month) "
