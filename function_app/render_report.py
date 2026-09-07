@@ -283,6 +283,19 @@ def build_workbook(summary: dict[str, Any], applicant: dict[str, Any] | None = N
     for row in (summary.get("part5") or {}).get("high_frequency") or []:
         ws.append([row.get("merchant"), row.get("hits")])
     ws.append([])
+    gaps = (summary.get("part5") or {}).get("evidence_gaps") or []
+    if gaps:
+        ws.append(["Evidence gaps", "What is missing", "Evidence", "Requires sign-off"])
+        for row in gaps:
+            ws.append(
+                [
+                    row.get("topic"),
+                    row.get("note"),
+                    row.get("evidence"),
+                    "Yes" if row.get("requires_signoff") else "No",
+                ]
+            )
+        ws.append([])
     ws.append(["Underwriter audit notes", "Note", "Requires sign-off"])
     notes = (summary.get("part5") or {}).get("underwriter_notes") or []
     if not notes:

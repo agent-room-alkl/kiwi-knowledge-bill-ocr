@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.compute_summary import compute_summary, monthly_equivalent
+from pipeline.compute_summary import compute_summary, evidence_gaps, monthly_equivalent
 
 ASSESSMENT = "2026-08-31"
 
@@ -680,6 +680,169 @@ def test_variable_grocery_is_not_weeklyised_from_one_outlier():
     assert calc["assessed_frequency"] != "weekly" or calc["dominant_amount"] < 150
 
 
+def _gap_topics(out):
+    return [g["topic"] for g in out["part5"]["evidence_gaps"]]
+
+
+def _rent_only_binder(extra_txns=None, extra_cls=None, applicant=None, accounts=None):
+    """Two months of rent and nothing else, plus whatever the caller adds.
+
+    The rent is the control: it is the one figure every gap test asserts stays
+    put, because a detection-only check that quietly moved rent would be the
+    exact failure these tests exist to catch.
+    """
+    txns = [
+        _txn("r1", "2026-06-04", "RENT A. LANDLORD", 2400, "outflow", "RENT LANDLORD"),
+        _txn("r2", "2026-07-04", "RENT A. LANDLORD", 2400, "outflow", "RENT LANDLORD"),
+    ]
+    cls = [
+        _cls("r1", "rent_board_paid", False, "monthly"),
+        _cls("r2", "rent_board_paid", False, "monthly"),
+    ]
+    canonical = {
+        "assessment_date": ASSESSMENT,
+        "accounts": accounts if accounts is not None else [
+            {"account_id": "a1", "institution": "ANZ",
+             "period_start": "2026-06-01", "period_end": "2026-07-31", "days_covered": 61}
+        ],
+        "transactions": txns + list(extra_txns or []),
+    }
+    if applicant is not None:
+        canonical["applicant"] = applicant
+    return canonical, {
+        "assessment_date": ASSESSMENT,
+        "classifications": cls + list(extra_cls or []),
+    }
+
+
+def test_evidence_gaps_five_families_do_not_move_money():
+    """All five gap families fire at once and not one cent moves."""
+
+    control_out = compute_summary(*_rent_only_binder())
+
+    # (a) names ASB, which has no statement here. (b) a school payment while
+    # Dependants is unrecorded. (c) NZTA with no vehicle insurer anywhere.
+    # (d) no energy retailer in the whole file. (e) a Wise transfer out, over
+    # the threshold, inside the window before the assessment date.
+    extra_txns = [
+        _txn("g1", "2026-06-10", "TFR TO ASB 12-3456-0000001-00", 300, "outflow", "ASB TRANSFER"),
+        _txn("g2", "2026-06-12", "WAIRAU INTERMEDIATE SCHOOL", 180, "outflow", "WAIRAU INTERMEDIATE SCHOOL"),
+        _txn("g3", "2026-06-14", "NZ TRANSPORT AGENCY REGO", 113.94, "outflow", "NZ TRANSPORT AGENCY"),
+        _txn("g4", "2026-08-20", "WISE NZ TRANSFER", 3000, "outflow", "WISE"),
+    ]
+    extra_cls = [
+        _cls("g1", "unclear", False, "one_off"),
+        _cls("g2", "unclear", False, "one_off"),
+        _cls("g3", "unclear", False, "one_off"),
+        _cls("g4", "unclear", False, "one_off"),
+    ]
+    out = compute_summary(*_rent_only_binder(extra_txns, extra_cls))
+    topics = _gap_topics(out)
+
+    assert len(topics) == 5, f"expected all five gap families, got {topics}"
+    assert any(t.startswith("Account outside binder") and "ASB" in t for t in topics), topics
+    assert "Dependants not recorded" in topics, topics
+    assert "Vehicle costs without vehicle insurance" in topics, topics
+    assert "No power or gas in the file" in topics, topics
+    assert "Large offshore transfer before assessment" in topics, topics
+
+    # The whole point of T-04: detection only.
+    assert out["audit"]["rent_monthly"] == 2400, out["audit"]["rent_monthly"]
+    assert out["audit"]["rent_monthly"] == control_out["audit"]["rent_monthly"]
+    assert out["recommended_monthly_living"] == control_out["recommended_monthly_living"], (
+        f"gaps moved recommended {control_out['recommended_monthly_living']} "
+        f"-> {out['recommended_monthly_living']}"
+    )
+    # Every Part 1 line is untouched. The one row that legitimately differs is
+    # TOTAL ONE-OFF EXCLUDED, which is a raw sum of the rows the caller added -
+    # and its value proves the gap-triggering spend landed in the excluded
+    # bucket rather than in anybody's living expenses.
+    def _part1(summary):
+        return {
+            r["category"]: r["monthly_equivalent"]
+            for r in summary["part1"]
+            if r["category"] != "TOTAL ONE-OFF EXCLUDED"
+        }
+    assert _part1(out) == _part1(control_out), (
+        f"gaps changed Part 1: {_part1(control_out)} -> {_part1(out)}"
+    )
+    one_off = next(
+        r["monthly_equivalent"] for r in out["part1"]
+        if r["category"] == "TOTAL ONE-OFF EXCLUDED"
+    )
+    assert one_off == round(300 + 180 + 113.94 + 3000, 2), one_off
+
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Evidence gaps")
+    assert note["requires_signoff"] is True
+    assert "5 evidence gap(s)" in note["note"], note["note"]
+
+
+def test_evidence_gap_skips_banks_already_in_the_binder():
+    """A transfer naming a bank whose statement IS here is not a gap."""
+
+    extra_txns = [_txn("b1", "2026-06-10", "TFR TO ANZ 06-0081-0097480-00", 300, "outflow", "ANZ TRANSFER")]
+    extra_cls = [_cls("b1", "unclear", False, "one_off")]
+    out = compute_summary(*_rent_only_binder(extra_txns, extra_cls))
+    topics = _gap_topics(out)
+    assert not any("ANZ" in t for t in topics), f"ANZ is in the binder, not a gap: {topics}"
+
+
+def test_evidence_gaps_stay_quiet_when_the_binder_answers_them():
+    """Dependants recorded, vehicle insured, power paid, no offshore transfer."""
+
+    extra_txns = [
+        _txn("e1", "2026-06-05", "MERIDIAN ENERGY", 180.4, "outflow", "MERIDIAN ENERGY"),
+        _txn("e2", "2026-07-05", "MERIDIAN ENERGY", 180.4, "outflow", "MERIDIAN ENERGY"),
+        _txn("v1", "2026-06-14", "NZ TRANSPORT AGENCY REGO", 113.94, "outflow", "NZ TRANSPORT AGENCY"),
+        _txn("i1", "2026-06-06", "AA INSURANCE", 62.1, "outflow", "AA INSURANCE"),
+        _txn("i2", "2026-07-06", "AA INSURANCE", 62.1, "outflow", "AA INSURANCE"),
+    ]
+    extra_cls = [
+        _cls("e1", "utilities", True, "monthly", subtype="power"),
+        _cls("e2", "utilities", True, "monthly", subtype="power"),
+        _cls("v1", "transport", True, "one_off"),
+        _cls("i1", "insurance", True, "monthly", subtype="vehicle"),
+        _cls("i2", "insurance", True, "monthly", subtype="vehicle"),
+    ]
+    applicant = {
+        "Full Name(s)": "Alex Taylor",
+        "Age(s)": "41",
+        "Dependants": "2",
+        "Address and living situation": "12 Example Street, Wellington 6011 (Renting)",
+    }
+    out = compute_summary(*_rent_only_binder(extra_txns, extra_cls, applicant=applicant))
+    topics = _gap_topics(out)
+    assert topics == [], f"clean binder should report no gaps, got {topics}"
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Evidence gaps")
+    assert note["requires_signoff"] is False
+    assert "No evidence gaps" in note["note"], note["note"]
+
+
+def test_evidence_gaps_survive_a_malformed_transaction_date():
+    """An unreadable date drops that row from the check, it does not raise.
+
+    Called against evidence_gaps directly: the surrounding engine has its own
+    date handling, and this asserts only that the gap checks are not the thing
+    that turns a bad row into a failed assessment.
+    """
+
+    rows = [
+        {"date": "not-a-date", "description": "WISE NZ TRANSFER", "merchant_normalized": "WISE",
+         "amount": 3000, "direction": "outflow"},
+        {"date": "2026-08-20", "description": "WISE NZ TRANSFER", "merchant_normalized": "WISE",
+         "amount": 3000, "direction": "outflow"},
+    ]
+    accounts = [{"account_id": "a1", "institution": "ANZ", "days_covered": 61}]
+    applicant = {"Dependants": "2"}
+    gaps = evidence_gaps(rows, accounts, applicant, ASSESSMENT, {"vehicle": 62.1}, {"power": 180.4})
+    topics = [g["topic"] for g in gaps]
+    assert "Large offshore transfer before assessment" in topics, topics
+    offshore = next(g for g in gaps if g["topic"] == "Large offshore transfer before assessment")
+    assert "3000.00" in offshore["evidence"], offshore["evidence"]
+    assert "not-a-date" not in offshore["evidence"], offshore["evidence"]
+    assert "1 remittance(s)" in offshore["note"], offshore["note"]
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -702,6 +865,10 @@ if __name__ == "__main__":
         test_missing_is_business_is_a_visible_warning_not_a_clean_zero,
         test_extract_duplicate_is_dropped_genuine_repeats_sum,
         test_variable_grocery_is_not_weeklyised_from_one_outlier,
+        test_evidence_gaps_five_families_do_not_move_money,
+        test_evidence_gap_skips_banks_already_in_the_binder,
+        test_evidence_gaps_stay_quiet_when_the_binder_answers_them,
+        test_evidence_gaps_survive_a_malformed_transaction_date,
     ]
     for fn in tests:
         fn()

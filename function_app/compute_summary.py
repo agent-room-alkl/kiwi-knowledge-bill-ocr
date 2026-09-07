@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import re
+
 from collections import defaultdict
 from datetime import date, datetime
 from statistics import median
@@ -518,6 +520,171 @@ def _conduct_rows(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+# --- Evidence gaps -----------------------------------------------------------
+#
+# A binder can be arithmetically perfect and still be the wrong binder. These
+# checks read what is already in the extract and name what is missing from it,
+# so nobody signs a complete-looking report over an incomplete file. Every
+# check reports absence of evidence, never a finding of fact - "no power bill
+# in these statements" is not "this household has no power".
+
+_OTHER_BANKS = {
+    "ASB": r"\bASB\b",
+    "BNZ": r"\bBNZ\b",
+    "Westpac": r"\bWESTPAC\b",
+    "ANZ": r"\bANZ\b",
+    "Kiwibank": r"\bKIWIBANK\b",
+    "TSB": r"\bTSB\b",
+    "Co-operative Bank": r"\bCO-?OPERATIVE BANK\b",
+    "Heartland": r"\bHEARTLAND\b",
+    "SBS": r"\bSBS BANK\b",
+    "Rabobank": r"\bRABOBANK\b",
+}
+_DEPENDANT_EVIDENCE = (
+    r"\bSCHOOL\b|\bCOLLEGE\b|\bINTERMEDIATE\b|\bKINDERGARTEN\b|\bKINDY\b|"
+    r"\bDAYCARE\b|\bDAY CARE\b|\bCHILDCARE\b|\bEARLY LEARNING\b|\bPRE-?SCHOOL\b|"
+    r"\bBOARD OF TRUSTEES\b|\bPTA\b"
+)
+_VEHICLE_EVIDENCE = (
+    r"\bNZ TRANSPORT AGENCY\b|\bNZTA\b|\bWAKA KOTAHI\b|\bREGO\b|\bVTNZ\b|\bVINZ\b|"
+    r"\bWOF\b|\bAA \b|\bAUTOMOBILE ASSOCIATION\b|\bREPCO\b|\bMOTOR\b|\bTYRE\b|"
+    r"\bAUTOMOTIVE\b|\bPANELBEAT\b|\bMECHANIC\b"
+)
+_VEHICLE_INSURER = (
+    r"\bAMI\b|\bSTATE INSURANCE\b|\bTOWER\b|\bVERO\b|\bAA INSURANCE\b|\bPROTECTA\b|"
+    r"\bSTAR INSURANCE\b|\bINITIO\b|\bCOVE INSURANCE\b"
+)
+_ENERGY_RETAILER = (
+    r"\bMERIDIAN\b|\bGENESIS\b|\bCONTACT ENERGY\b|\bMERCURY\b|\bNOVA ENERGY\b|"
+    r"\bFRANK ENERGY\b|\bELECTRIC KIWI\b|\bPOWERSHOP\b|\bFLICK ELECTRIC\b|"
+    r"\bPULSE ENERGY\b|\bTRUSTPOWER\b|\bZ ENERGY LTD\b|\bVECTOR\b|\bELECTRICITY\b|"
+    r"\bPOWER CO\b|\bSLINGSHOT POWER\b|\bTOAST ELECTRIC\b|\bECOTRICITY\b"
+)
+_REMITTER = (
+    r"\bRMTLY\b|\bREMITLY\b|\bWISE\b|\bTRANSFERWISE\b|\bOFX\b|\bWESTERN UNION\b|"
+    r"\bMONEYGRAM\b|\bXE\.COM\b|\bWORLDREMIT\b|\bORBIT REMIT\b|\bRIA MONEY\b"
+)
+REMITTANCE_WINDOW_DAYS = 30
+REMITTANCE_MIN_AMOUNT = 500.0
+
+
+def _row_blob(row: dict[str, Any]) -> str:
+    return f"{row.get('description') or ''} {row.get('merchant_normalized') or ''}".upper()
+
+
+def _gap(topic: str, note: str, evidence: list[str]) -> dict[str, Any]:
+    return {
+        "topic": topic,
+        "note": note,
+        "evidence": "; ".join(evidence[:6]) if evidence else "no matching transactions",
+        "requires_signoff": True,
+    }
+
+
+def evidence_gaps(
+    joined: list[dict[str, Any]],
+    accounts: list[dict[str, Any]],
+    applicant: dict[str, Any],
+    assessment_date: str | None,
+    insurance_monthly: dict[str, float],
+    utility_monthly: dict[str, float],
+) -> list[dict[str, Any]]:
+    """Name what this binder cannot answer. Detection only - no amount moves."""
+
+    rows = [r for r in joined if r.get("direction") != "info"]
+    gaps: list[dict[str, Any]] = []
+
+    # (a) A transfer naming a bank whose statement is not in this binder.
+    held = {str(a.get("institution") or "").upper() for a in accounts}
+    for name, pattern in _OTHER_BANKS.items():
+        if name.upper() in held:
+            continue
+        hits = [r for r in rows if re.search(pattern, _row_blob(r))]
+        if hits:
+            gaps.append(_gap(
+                f"Account outside binder - {name}",
+                f"{len(hits)} transaction(s) name {name}, which has no statement in this "
+                f"binder. Spend settled from that account is invisible here.",
+                [f"{r['date']} {str(r.get('description') or '')[:40]} {abs(float(r.get('amount') or 0)):.2f}" for r in hits],
+            ))
+
+    # (b) School / childcare spend while the file records no dependants.
+    dependants = str((applicant or {}).get("Dependants") or "").strip()
+    dependants_unknown = (not dependants) or dependants.lower().startswith("not provided")
+    child_hits = [r for r in rows if re.search(_DEPENDANT_EVIDENCE, _row_blob(r))]
+    if child_hits and dependants_unknown:
+        schools = sorted({str(r.get("merchant_normalized") or r.get("description") or "")[:40] for r in child_hits})
+        gaps.append(_gap(
+            "Dependants not recorded",
+            f"{len(child_hits)} school/childcare transaction(s) across {len(schools)} provider(s), "
+            f"but Dependants is '{dependants or 'blank'}'. Dependant count drives the living "
+            f"expense benchmark and is unresolved.",
+            schools,
+        ))
+
+    # (c) Vehicle running costs with no vehicle insurer anywhere in the file.
+    vehicle_hits = [r for r in rows if re.search(_VEHICLE_EVIDENCE, _row_blob(r))]
+    insurer_hits = [r for r in rows if re.search(_VEHICLE_INSURER, _row_blob(r))]
+    subtypes = " ".join(insurance_monthly).lower()
+    subtype_vehicle = any(w in subtypes for w in ("vehicle", "car", "motor"))
+    if vehicle_hits and not insurer_hits and not subtype_vehicle:
+        gaps.append(_gap(
+            "Vehicle costs without vehicle insurance",
+            f"{len(vehicle_hits)} vehicle-related transaction(s) but no vehicle insurer in "
+            f"this binder. Either the premium is paid elsewhere, is annual and outside the "
+            f"window, or the vehicle is uninsured.",
+            sorted({str(r.get("merchant_normalized") or "")[:40] for r in vehicle_hits if r.get("merchant_normalized")}),
+        ))
+
+    # (d) No energy retailer at all across the whole window.
+    if rows and not any(re.search(_ENERGY_RETAILER, _row_blob(r)) for r in rows):
+        days = sum(int(a.get("days_covered") or 0) for a in accounts)
+        util_subtypes = " ".join(utility_monthly).lower()
+        if not any(w in util_subtypes for w in ("power", "electric", "energy", "gas")):
+            gaps.append(_gap(
+                "No power or gas in the file",
+                f"No electricity or gas retailer appears in {days} statement-days. A household "
+                f"pays for energy somewhere - this binder does not show where.",
+                [],
+            ))
+
+    # (e) Large money out of the country close to the assessment date.
+    if assessment_date:
+        try:
+            asof = parse_date(assessment_date)
+        except (ValueError, TypeError):
+            asof = None
+        if asof:
+            def _within_window(row: dict[str, Any]) -> bool:
+                # A gap check is a reporting aid. It must never be the thing
+                # that fails an assessment, so one unreadable date drops that
+                # row from this check rather than raising.
+                try:
+                    days = (asof - parse_date(row.get("date"))).days
+                except (ValueError, TypeError):
+                    return False
+                return 0 <= days <= REMITTANCE_WINDOW_DAYS
+
+            recent = [
+                r for r in rows
+                if r.get("direction") == "outflow"
+                and abs(float(r.get("amount") or 0)) >= REMITTANCE_MIN_AMOUNT
+                and re.search(_REMITTER, _row_blob(r))
+                and _within_window(r)
+            ]
+            if recent:
+                total = sum(abs(float(r.get("amount") or 0)) for r in recent)
+                gaps.append(_gap(
+                    "Large offshore transfer before assessment",
+                    f"{len(recent)} remittance(s) totalling {total:.2f} left the country within "
+                    f"{REMITTANCE_WINDOW_DAYS} days of the assessment date. Excluded as one-off; "
+                    f"the reason for the transfer is not evidenced.",
+                    [f"{r['date']} {str(r.get('description') or '')[:40]} {abs(float(r.get('amount') or 0)):.2f}" for r in recent],
+                ))
+
+    return gaps
+
+
 def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) -> dict[str, Any]:
     txns = canonical.get("transactions") or []
     by_id = _index_classifications(classifications, txns)
@@ -934,6 +1101,15 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
     discretionary = round(category_monthly.get("recreation_entertainment", 0.0), 2)
     unclear_manual = sum(1 for r in joined if r["category"] in {"unclear", "underwriter_manual"})
     extraction_errors = canonical.get("errors") or []
+    applicant = canonical.get("applicant") or {
+        "Full Name(s)": "Not provided in binder",
+        "Age(s)": "Not provided in binder",
+        "Dependants": "Not provided in binder",
+        "Address and living situation": "Not provided in binder",
+    }
+    gaps = evidence_gaps(
+        joined, accounts, applicant, assessment_date, insurance_monthly, utility_monthly
+    )
     underwriter_notes = [
         {"topic": "File quality", "note": f"{len(accounts)} statement records; {len(txns)} canonical rows; {len(extraction_errors)} extraction errors.", "requires_signoff": bool(extraction_errors)},
         {
@@ -952,6 +1128,16 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         {"topic": "Liabilities", "note": f"{len(part4)} evidenced facilities; status: {liability_status}.", "requires_signoff": bool(part4)},
         {"topic": "Discretionary spend", "note": f"Recreation and entertainment monthly equivalent: {discretionary:.2f}.", "requires_signoff": discretionary > 0},
         {"topic": "Unclear/manual", "note": f"{unclear_manual} transactions require manual review or remain unclear.", "requires_signoff": unclear_manual > 0},
+        {
+            "topic": "Evidence gaps",
+            "note": (
+                f"{len(gaps)} evidence gap(s) detected - see the Evidence gaps block: "
+                + "; ".join(g["topic"] for g in gaps)
+                if gaps
+                else "No evidence gaps detected by the automated checks."
+            ),
+            "requires_signoff": bool(gaps),
+        },
     ]
     if business_classification_missing:
         underwriter_notes.insert(
@@ -969,12 +1155,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
 
     return {
         "assessment_date": assessment_date,
-        "applicant": canonical.get("applicant") or {
-            "Full Name(s)": "Not provided in binder",
-            "Age(s)": "Not provided in binder",
-            "Dependants": "Not provided in binder",
-            "Address and living situation": "Not provided in binder",
-        },
+        "applicant": applicant,
         "accounts": accounts,
         "document_index": canonical.get("document_index") or [
             {
@@ -1016,6 +1197,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 [{"merchant": m, "hits": n} for m, n in hits.items() if n >= 3],
                 key=lambda r: (-r["hits"], r["merchant"]),
             ),
+            "evidence_gaps": gaps,
             "underwriter_notes": underwriter_notes,
         },
         "audit": {
