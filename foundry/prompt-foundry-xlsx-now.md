@@ -153,7 +153,7 @@ Hard classification rules:
 - Credits are never living expenses.
 - A card payment is never salary or spend.
 - Classify every worklist `transaction_id`. Omitting an id is a join-miss, worse than `unclear` with a reason.
-- Repeated small inflows from many personal names (bun / egg / food-sale notes) → `other_income`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `salary_wages`. Never recommended living.
+- Repeated small inflows from many personal names (bun / egg / food-sale notes) → `unclear`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `salary_wages`. Never `other_income` (that category enters Part 1.4 Income). Never recommended living. Turnover belongs in an evidence gap, not in income.
 - Wholesale / catering stock (trade wholesaler / Foodstuffs catering channel) → `is_business` yes, include false, COGS — not household grocery when bun/egg sales also appear.
 - Workspace lease, advertising, trade processor fees, professional software → `is_business` yes, include false.
 - FX `USD @ conversion rate` residue → `unclear` or `one_off`, include false, not a purchase.

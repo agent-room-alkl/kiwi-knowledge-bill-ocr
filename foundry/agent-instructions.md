@@ -52,7 +52,7 @@ Other: `underwriter_manual` (council rates), `unclear` (confidence < 0.6).
 
 **Every worklist `transaction_id` must be classified.** Dropping an id is a join-miss (engine unclear with no model reason). Prefer `unclear` plus a reason over omitting the row.
 
-**Side business vs salary.** Repeated small inflows from many personal names — especially bun / pork bun / egg / food-sale notes — are **gross side-business receipts**, not wages: `other_income`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `salary_wages`. Never dump them as `unclear` only because the counterparty is a person. Do not treat the total as net profit or put it in recommended living.
+**Side business vs salary.** Repeated small inflows from many personal names — especially bun / pork bun / egg / food-sale notes — are **gross side-business receipts**, not wages and **not assessable income**. Classify: `unclear`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `salary_wages`. Never `other_income` — the engine would add each payer to Part 1.4 Income and over-monthlyise. Still classify every id (omit = join-miss). Do not treat the total as net profit or put it in recommended living. The turnover figure belongs in an evidence gap / underwriter note, not in income.
 
 Person-name **outflows** in that same food-trade pattern are business COGS/payouts: `is_business` yes, include false, not household grocery.
 
