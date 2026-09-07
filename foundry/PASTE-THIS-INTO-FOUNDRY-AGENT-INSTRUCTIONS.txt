@@ -150,14 +150,23 @@ If `status` is `not_published`, report that; do not claim delivery.
 
 Any FAIL → do not render.
 
-**C8 and C9 are repairable, and repairing them is your job, not the
-reader's.** Both say what to do: classify what is missing and call
-`compute_summary` again with the fuller classification set. Do that yourself,
-up to **three** passes, before reporting anything. Each pass: take the
-merchants or inflows the failure names, classify them (`unclear` with a
-reason is a valid answer — a guess is not), and re-run `compute_summary`
-with **all** classifications, the earlier ones included. Stopping at the
-first C8/C9 and handing the list back is a refusal to finish the work.
+**C8 is repairable, and repairing it is your job, not the reader's.**
+Classify the inflows it names and call `compute_summary` again, once. Then
+continue.
+
+**C9 does not stop the render.** Unclassified rows are reported, not fatal:
+the engine already shows them as `unclear` with reason `no classification
+joined`, counts them in `audit.join_miss_rows`, and splits them out in
+Part 5 "Unclear sources". A workbook that says "145 of 611 rows carry no
+classification" is worth more to an underwriter than no workbook at all.
+
+So: make **one** repair pass at C9 - classify the merchants it names
+(`unclear` with a reason is a valid answer, a guess is not) and re-run
+`compute_summary`. If rows remain unresolved after that pass, **render
+anyway** and say so in the closing summary: how many rows, and that they are
+excluded from every total. Do not retry past one pass; resending the whole
+classification set repeatedly is what exhausts the context window, and
+stopping at C9 with a list and no workbook is a refusal to finish the work.
 
 Report `SELFCHECK_FAILED` with the C-numbers when a check is not repairable,
 or when three repair passes have not cleared C8/C9 — then say what you tried
@@ -180,12 +189,13 @@ and what is still unresolved.
   gross turnover the engine reports for visibility, and a binder whose
   salary went unclassified would otherwise pass C8 on turnover alone.
   `audit.assessable_income_monthly == 0` is the check
-- C9 `audit.join_miss_rows` > 0 → some canonical rows resolved to no
-  classification. Do NOT compare the length of `classifications` against the
-  transaction count: one merchant entry covers every row of that merchant,
-  so 238 merchant entries legitimately classify 611 rows and that comparison
-  fails a correct run every time. Go back to step 2, classify the merchants
-  the worklist still lists, re-run compute — do not extract again
+- C9 `audit.join_miss_rows` > 0 → WARN, one repair pass, then still render.
+  Do NOT compare the length of `classifications` against the transaction
+  count: one merchant entry covers every row of that merchant, so 238
+  merchant entries legitimately classify 611 rows and that comparison fails
+  a correct run every time. Report the count in the six-line summary. Never
+  treat C9 as SELFCHECK_FAILED — like C10, it describes a file that needs
+  review, not a file that cannot be rendered
 - C10 >15% unclear → WARN only, still render. Report the count in the
   six-line summary. Do not treat C10 as SELFCHECK_FAILED.
 - C11 `part4` field absent (empty array OK only with no-liability status)

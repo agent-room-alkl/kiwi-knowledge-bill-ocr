@@ -65,19 +65,23 @@ def test_c9_reads_join_misses_not_the_length_of_the_classifications_array():
         assert "one merchant entry covers every row" in text, name
 
 
-def test_repairable_selfchecks_tell_the_agent_to_retry_before_reporting():
-    """C8/C9 name their own fix, so the agent must apply it, not forward it.
+def test_c9_warns_and_still_renders_instead_of_blocking():
+    """A file with unclassified rows still gets a workbook.
 
-    Both checks come with a remedy - classify what is missing and recompute.
-    An agent that reports SELFCHECK_FAILED on the first C9 hands the user a
-    list of merchants and no workbook, which is the failure this project
-    keeps hitting.
+    Three runs in a row ended with a list of merchants and no workbook, and
+    the third exhausted the agent's context window resending the whole
+    classification set. Unclassified rows are already reported - unclear with
+    a reason, counted in audit.join_miss_rows, split out in Part 5 - so the
+    underwriter is better served by the workbook plus the count than by
+    nothing at all. One repair pass, then render.
     """
     for name in ("PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt", "prompt-foundry-v2.md"):
         text = (ROOT / "foundry" / name).read_text(encoding="utf-8")
-        assert "C8 and C9 are repairable" in text, name
-        assert "three" in text.split("C8 and C9 are repairable")[1][:600], name
-        assert "the earlier ones included" in text, name
+        assert "C8 is repairable" in text, name
+        assert "C9 does not stop the render" in text, name
+        assert "render" in text and "anyway" in text, name
+        assert "Never" in text and "treat C9 as SELFCHECK_FAILED" in text, name
+        assert "exhausts the context window" in text, name
 
 
 if __name__ == "__main__":
@@ -89,6 +93,6 @@ if __name__ == "__main__":
     print("ok test_selfcheck_ignores_side_business_turnover_when_judging_empty_income")
     test_c9_reads_join_misses_not_the_length_of_the_classifications_array()
     print("ok test_c9_reads_join_misses_not_the_length_of_the_classifications_array")
-    test_repairable_selfchecks_tell_the_agent_to_retry_before_reporting()
-    print("ok test_repairable_selfchecks_tell_the_agent_to_retry_before_reporting")
+    test_c9_warns_and_still_renders_instead_of_blocking()
+    print("ok test_c9_warns_and_still_renders_instead_of_blocking")
     print("ALL PASS")
