@@ -76,10 +76,38 @@ Use `transaction_id` instead of `merchant` only when one row truly differs
 from the rest of that merchant. Never invent ids. Schema has
 `additionalProperties: false` and no amount field — do not restate amounts.
 
-**Classify inflows too.** Salary → `salary_wages`; WINZ/WFF → `benefit`;
-rent received → `rental_income`. Unclassified inflows become `unclear` and
-income disappears. Own-account moves → `internal_transfer`; card refunds →
-`reimbursement`.
+**Classify every worklist `transaction_id`.** Omitting an id is a join-miss
+(the engine then shows unclear with no model reason). Prefer `unclear` plus
+a reason over dropping the row. **C9** is this check.
+
+**Classify inflows too.** Salary / employer payroll → `salary_wages`;
+WINZ/WFF → `benefit`; rent received → `rental_income`. Own-account moves →
+`internal_transfer`; card refunds → `reimbursement`.
+
+**Side business vs salary.** Repeated small inflows from many personal
+names — especially bun / pork bun / egg / food-sale notes — are **gross
+side-business receipts**, not wages and **not assessable income**:
+- category `unclear` (never `salary_wages`, never `other_income`)
+- `include_in_living_expenses` false
+- `is_business` yes
+- reason `side-business gross receipts, not net profit`
+Never `other_income`: the engine puts that category in Part 1.4 Income
+and monthlyises each payer on its own window. Classify every id
+(omit = join-miss). Do not treat the sum as net profit or put it in
+recommended living. Turnover belongs in an evidence gap, not in income.
+
+Person-name **outflows** in that food-trade pattern are business
+COGS/payouts: `is_business` yes, include false, not household grocery.
+
+Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering
+channel) → `is_business` yes, include false, `wholesale stock / COGS`.
+If bun/egg sales also appear, do not leave these as `review`.
+
+Workspace lease, advertising, trade payment-processor fees, and
+professional/trade software → `is_business` yes, include false.
+
+FX residue (`USD @ … conversion rate`) is not a purchase: `unclear` or
+`one_off`, include false, reason `foreign currency conversion line item`.
 
 `suggested_frequency` is a descriptor hint only (`WEEKLY` in the text, known
 monthly subscription). The engine measures date gaps and wins.
@@ -124,12 +152,18 @@ Any FAIL → do not render; report `SELFCHECK_FAILED` with the C-numbers.
   while part2 has outflows
 - C3 any part2 description is opening/closing/brought/carried forward
 - C4 amount equals that row's balance on >3 rows **and** >5% of rows
-- C5 only if total income > 0: one living line > income, or recommended
-  living > income × 3; if no income, skip with a WARN (C8 covers it)
+- C5 only if assessable income > 0: one living line > that income, or
+  recommended living > it × 3; if none, skip with a WARN (C8 covers it).
+  Use `audit.assessable_income_monthly`, never the raw income total — that
+  total includes side-business turnover, which is not assessable income
 - C6 rent exists in part2 but Part 1 Rent is 0
 - C7 POSREJ/DECLINED/REVERSED/NSF/DISHONOUR still has a non-zero amount
-- C8 `income` empty while part2 has inflows → go back to step 2, classify
-  inflows, re-run compute — do not render
+- C8 no *assessable* income while part2 has inflows → go back to step 2,
+  classify inflows, re-run compute — do not render. Ignore income rows of
+  type `side_business_gross_not_assessable` when judging empty: that row is
+  gross turnover the engine reports for visibility, and a binder whose
+  salary went unclassified would otherwise pass C8 on turnover alone.
+  `audit.assessable_income_monthly == 0` is the check
 - C9 classification count ≠ canonical transaction count
 - C10 >15% unclear → WARN only, still render. Report the count in the
   six-line summary. Do not treat C10 as SELFCHECK_FAILED.
