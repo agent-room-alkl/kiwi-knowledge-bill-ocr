@@ -768,10 +768,57 @@ def normalize(layout: dict[str, Any], assessment_date: str) -> dict[str, Any]:
     if limit is not None:
         account["credit_limit"] = limit
 
+    attach_fx_merchants(transactions)
+
     account["applicant"] = _applicant_evidence(lines)
     account["conduct"] = _conduct_assessment(lines, transactions, account_type, limit)
 
     return {"account": account, "transactions": transactions}
+
+
+# A foreign-currency card purchase prints across two rows. The money row
+# carries the converted amount and the rate but no merchant; the row under it
+# carries the fee and the merchant, and moves no money:
+#
+#   POS W/D 23.00USD @ 0.5922 conversion rate                        39.56
+#   (INC. $0.72 INTERNATIONAL TRANSACTION FEE) OPENAI OPENAI.COM CA
+#
+# Zeroing the second row is right - it is not a posting. Discarding the only
+# copy of the merchant name is not. Without this the classifier sees a bare
+# exchange rate and can do nothing but call it unclear, which is how 31 rows
+# of OpenAI, Anthropic, Vercel and GitHub ended up as unidentifiable spend.
+_BARE_FX_RE = re.compile(r"^\s*(?:POS\s*W/?D\s+|REFUND\s+)?[\d.]+\s*USD\s*@\s*[\d.]+\s*conversion rate\s*$", re.I)
+_FX_FEE_MERCHANT_RE = re.compile(
+    r"^\(INC\.?\s*\$?[\d.]+\s*INTERNATIONAL TRANSACTION FEE\)\s*(?P<merchant>.+)$", re.I
+)
+
+
+def attach_fx_merchants(transactions: list[dict[str, Any]]) -> int:
+    """Give each bare conversion-rate row the merchant printed beneath it.
+
+    Only the row immediately below, only on the same date, and only when that
+    row is an info row carrying the fee text - so a merchant that already
+    named itself on the money row is never overwritten, and an unrelated
+    posting is never borrowed from.
+    """
+    attached = 0
+    for i, txn in enumerate(transactions):
+        if not _BARE_FX_RE.match(str(txn.get("description") or "")):
+            continue
+        nxt = transactions[i + 1] if i + 1 < len(transactions) else None
+        if not nxt or nxt.get("direction") != "info" or nxt.get("date") != txn.get("date"):
+            continue
+        match = _FX_FEE_MERCHANT_RE.match(str(nxt.get("description") or "").strip())
+        if not match:
+            continue
+        merchant = " ".join(match.group("merchant").split())
+        if not merchant:
+            continue
+        txn["description"] = f"{txn['description']} {merchant}"
+        txn["merchant_normalized"] = normalize_merchant(merchant)
+        txn["fx_merchant_source"] = "attached from the international transaction fee row"
+        attached += 1
+    return attached
 
 
 def _labelled_balance(lines: Iterable[str], label: str) -> float | None:

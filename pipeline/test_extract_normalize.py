@@ -606,3 +606,55 @@ for _good in ["Alex Taylor", "Wei Zhang", "Mary-Jane O'Brien"]:
 check("a holder name beside an address is still extracted",
       _applicant_evidence(["Account 01-0123-0456789-00 Alex Taylor 12 Example Street, Wellington 6011"])
       ["Full Name(s)"], "Alex Taylor")
+
+# A foreign-currency purchase prints its converted amount on one row and its
+# merchant on the fee row beneath. Zeroing that second row is right; throwing
+# away the only copy of the merchant name is not - 31 rows of OpenAI,
+# Anthropic, Vercel and GitHub reached the classifier as a bare exchange rate.
+from extract_normalize import attach_fx_merchants  # noqa: E402
+
+
+def _fx_rows():
+    return [
+        {"transaction_id": "a", "date": "2026-05-21", "amount": 35.03, "direction": "outflow",
+         "description": "POS W/D 20.00USD @ 0.5816 conversion rate",
+         "merchant_normalized": "20.00USD @ 0.5816 CONVERSION RATE"},
+        {"transaction_id": "b", "date": "2026-05-21", "amount": 0.0, "direction": "info",
+         "description": "(INC. $0.64 INTERNATIONAL TRANSACTION FEE) VERCEL INC. VERCEL.COM CA",
+         "merchant_normalized": ""},
+    ]
+
+
+_rows = _fx_rows()
+_before = [(r["amount"], r["direction"]) for r in _rows]
+check_true("one bare conversion row takes the merchant beneath it", attach_fx_merchants(_rows) == 1)
+check_true("the merchant is now on the money row", "VERCEL" in _rows[0]["description"], _rows[0]["description"])
+check_true("merchant_normalized is rebuilt from the name, not the rate",
+           "VERCEL" in _rows[0]["merchant_normalized"], _rows[0]["merchant_normalized"])
+check_true("no amount or direction moved", [(r["amount"], r["direction"]) for r in _rows] == _before)
+check_true("the fee row still moves no money", _rows[1]["amount"] == 0.0)
+
+# A row that already names its merchant must not have another one appended.
+_named = [
+    {"transaction_id": "c", "date": "2026-05-28", "amount": 25.73, "direction": "outflow",
+     "description": "POS W/D AGENT-ROOM.COM AUCKLAND NZ 15.00USD @ 0.5830 conversion rate",
+     "merchant_normalized": "AGENT-ROOM.COM"},
+    {"transaction_id": "d", "date": "2026-05-28", "amount": 0.0, "direction": "info",
+     "description": "(INC. $0.44 INTERNATIONAL TRANSACTION FEE) SOMETHING ELSE",
+     "merchant_normalized": ""},
+]
+check_true("a row that already named its merchant is left alone", attach_fx_merchants(_named) == 0)
+check("the named row is unchanged", _named[0]["merchant_normalized"], "AGENT-ROOM.COM")
+
+# Never borrow from an unrelated posting: only the fee row, only same day.
+_unrelated = _fx_rows()
+_unrelated[1] = {"transaction_id": "e", "date": "2026-05-21", "amount": 6.41, "direction": "outflow",
+                 "description": "SMALES FARM PARKING AUCKLAND", "merchant_normalized": "SMALES FARM PARKING"}
+check_true("an ordinary posting underneath is not borrowed from", attach_fx_merchants(_unrelated) == 0)
+
+_next_day = _fx_rows()
+_next_day[1]["date"] = "2026-05-22"
+check_true("a fee row dated differently is not attached", attach_fx_merchants(_next_day) == 0)
+
+_last = [_fx_rows()[0]]
+check_true("a conversion row with nothing beneath it is left as it is", attach_fx_merchants(_last) == 0)
