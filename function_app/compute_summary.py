@@ -1382,9 +1382,17 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             "requires_signoff": bool(gaps),
         },
     ]
+    # Info rows - opening balances, `Ref:` continuations, the international
+    # transaction fee lines - move no money and are deliberately kept off the
+    # classification worklist. Counting them as join misses reported 68
+    # unclassified rows on a file whose money rows were fully classified but
+    # two, and an underwriter reading that goes looking for a problem that is
+    # not there.
     join_miss = sum(
         1 for r in joined
-        if r["category"] == "unclear" and not r.get("classified")
+        if r["category"] == "unclear"
+        and not r.get("classified")
+        and r.get("direction") != "info"
     )
     model_unclear = sum(
         1 for r in joined
@@ -1511,7 +1519,10 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             # comparison between two different things - 238 merchants will
             # never equal 611 rows. This counts rows that came out of the
             # join with no classification at all.
-            "join_miss_rows": sum(1 for r in joined if not r.get("classified")),
+            "join_miss_rows": sum(
+                1 for r in joined
+                if not r.get("classified") and r.get("direction") != "info"
+            ),
             "classified_rows": sum(1 for r in joined if r.get("classified")),
             "side_business_gross_monthly": round(
                 sum(

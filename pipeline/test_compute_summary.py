@@ -1259,6 +1259,30 @@ def test_the_wider_join_key_moves_no_money():
     assert out["audit"]["join_miss_rows"] == 0 and control["audit"]["join_miss_rows"] == 2
 
 
+def test_info_rows_are_not_counted_as_unclassified():
+    """A balance line was never on the worklist, so it is not a join miss.
+
+    C9 keys off join_miss_rows and Part 5 prints it. Counting info rows put
+    "68 join-miss (no classification)" on a file whose money rows were fully
+    classified but two - a number that sends an underwriter hunting for
+    nothing.
+    """
+
+    txns = [
+        _txn("i1", "2026-06-01", "Opening balance", 0, "info", "OPENING BALANCE"),
+        _txn("i2", "2026-06-02", "Ref: 33GYM W2MHWQ 9", 0, "info", "REF"),
+        _txn("m1", "2026-06-03", "SOMETHING UNSEEN", 40, "outflow", "SOMETHING UNSEEN"),
+    ]
+    out = compute_summary(*_rent_only_binder(txns, []))
+    assert out["audit"]["join_miss_rows"] == 1, out["audit"]
+    note = next(
+        (n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear sources"),
+        None,
+    )
+    assert note is not None
+    assert "1 join-miss" in note["note"], note["note"]
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1296,6 +1320,7 @@ if __name__ == "__main__":
         test_trading_turnover_gets_its_own_income_line_outside_assessable_income,
         test_no_side_business_line_when_there_is_no_trading_shape,
         test_audit_counts_join_misses_not_classification_objects,
+        test_info_rows_are_not_counted_as_unclassified,
         test_business_receipts_are_their_own_category_not_unclear,
         test_one_payer_many_spellings_joins_to_one_classification,
         test_different_people_are_not_merged_by_the_join_key,
