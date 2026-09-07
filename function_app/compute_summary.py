@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import re
+
 from collections import defaultdict
 from datetime import date, datetime
 from statistics import median
@@ -518,6 +520,161 @@ def _conduct_rows(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+# --- Evidence gaps -----------------------------------------------------------
+#
+# A binder can be arithmetically perfect and still be the wrong binder. These
+# checks read what is already in the extract and name what is missing from it,
+# so nobody signs a complete-looking report over an incomplete file. Every
+# check reports absence of evidence, never a finding of fact - "no power bill
+# in these statements" is not "this household has no power".
+
+_OTHER_BANKS = {
+    "ASB": r"\bASB\b",
+    "BNZ": r"\bBNZ\b",
+    "Westpac": r"\bWESTPAC\b",
+    "ANZ": r"\bANZ\b",
+    "Kiwibank": r"\bKIWIBANK\b",
+    "TSB": r"\bTSB\b",
+    "Co-operative Bank": r"\bCO-?OPERATIVE BANK\b",
+    "Heartland": r"\bHEARTLAND\b",
+    "SBS": r"\bSBS BANK\b",
+    "Rabobank": r"\bRABOBANK\b",
+}
+_DEPENDANT_EVIDENCE = (
+    r"\bSCHOOL\b|\bCOLLEGE\b|\bINTERMEDIATE\b|\bKINDERGARTEN\b|\bKINDY\b|"
+    r"\bDAYCARE\b|\bDAY CARE\b|\bCHILDCARE\b|\bEARLY LEARNING\b|\bPRE-?SCHOOL\b|"
+    r"\bBOARD OF TRUSTEES\b|\bPTA\b"
+)
+_VEHICLE_EVIDENCE = (
+    r"\bNZ TRANSPORT AGENCY\b|\bNZTA\b|\bWAKA KOTAHI\b|\bREGO\b|\bVTNZ\b|\bVINZ\b|"
+    r"\bWOF\b|\bAA \b|\bAUTOMOBILE ASSOCIATION\b|\bREPCO\b|\bMOTOR\b|\bTYRE\b|"
+    r"\bAUTOMOTIVE\b|\bPANELBEAT\b|\bMECHANIC\b"
+)
+_VEHICLE_INSURER = (
+    r"\bAMI\b|\bSTATE INSURANCE\b|\bTOWER\b|\bVERO\b|\bAA INSURANCE\b|\bPROTECTA\b|"
+    r"\bSTAR INSURANCE\b|\bINITIO\b|\bCOVE INSURANCE\b"
+)
+_ENERGY_RETAILER = (
+    r"\bMERIDIAN\b|\bGENESIS\b|\bCONTACT ENERGY\b|\bMERCURY\b|\bNOVA ENERGY\b|"
+    r"\bFRANK ENERGY\b|\bELECTRIC KIWI\b|\bPOWERSHOP\b|\bFLICK ELECTRIC\b|"
+    r"\bPULSE ENERGY\b|\bTRUSTPOWER\b|\bZ ENERGY LTD\b|\bVECTOR\b|\bELECTRICITY\b|"
+    r"\bPOWER CO\b|\bSLINGSHOT POWER\b|\bTOAST ELECTRIC\b|\bECOTRICITY\b"
+)
+_REMITTER = (
+    r"\bRMTLY\b|\bREMITLY\b|\bWISE\b|\bTRANSFERWISE\b|\bOFX\b|\bWESTERN UNION\b|"
+    r"\bMONEYGRAM\b|\bXE\.COM\b|\bWORLDREMIT\b|\bORBIT REMIT\b|\bRIA MONEY\b"
+)
+REMITTANCE_WINDOW_DAYS = 30
+REMITTANCE_MIN_AMOUNT = 500.0
+
+
+def _row_blob(row: dict[str, Any]) -> str:
+    return f"{row.get('description') or ''} {row.get('merchant_normalized') or ''}".upper()
+
+
+def _gap(topic: str, note: str, evidence: list[str]) -> dict[str, Any]:
+    return {
+        "topic": topic,
+        "note": note,
+        "evidence": "; ".join(evidence[:6]) if evidence else "no matching transactions",
+        "requires_signoff": True,
+    }
+
+
+def evidence_gaps(
+    joined: list[dict[str, Any]],
+    accounts: list[dict[str, Any]],
+    applicant: dict[str, Any],
+    assessment_date: str | None,
+    insurance_monthly: dict[str, float],
+    utility_monthly: dict[str, float],
+) -> list[dict[str, Any]]:
+    """Name what this binder cannot answer. Detection only - no amount moves."""
+
+    rows = [r for r in joined if r.get("direction") != "info"]
+    gaps: list[dict[str, Any]] = []
+
+    # (a) A transfer naming a bank whose statement is not in this binder.
+    held = {str(a.get("institution") or "").upper() for a in accounts}
+    for name, pattern in _OTHER_BANKS.items():
+        if name.upper() in held:
+            continue
+        hits = [r for r in rows if re.search(pattern, _row_blob(r))]
+        if hits:
+            gaps.append(_gap(
+                f"Account outside binder - {name}",
+                f"{len(hits)} transaction(s) name {name}, which has no statement in this "
+                f"binder. Spend settled from that account is invisible here.",
+                [f"{r['date']} {str(r.get('description') or '')[:40]} {abs(float(r.get('amount') or 0)):.2f}" for r in hits],
+            ))
+
+    # (b) School / childcare spend while the file records no dependants.
+    dependants = str((applicant or {}).get("Dependants") or "").strip()
+    dependants_unknown = (not dependants) or dependants.lower().startswith("not provided")
+    child_hits = [r for r in rows if re.search(_DEPENDANT_EVIDENCE, _row_blob(r))]
+    if child_hits and dependants_unknown:
+        schools = sorted({str(r.get("merchant_normalized") or r.get("description") or "")[:40] for r in child_hits})
+        gaps.append(_gap(
+            "Dependants not recorded",
+            f"{len(child_hits)} school/childcare transaction(s) across {len(schools)} provider(s), "
+            f"but Dependants is '{dependants or 'blank'}'. Dependant count drives the living "
+            f"expense benchmark and is unresolved.",
+            schools,
+        ))
+
+    # (c) Vehicle running costs with no vehicle insurer anywhere in the file.
+    vehicle_hits = [r for r in rows if re.search(_VEHICLE_EVIDENCE, _row_blob(r))]
+    insurer_hits = [r for r in rows if re.search(_VEHICLE_INSURER, _row_blob(r))]
+    subtypes = " ".join(insurance_monthly).lower()
+    subtype_vehicle = any(w in subtypes for w in ("vehicle", "car", "motor"))
+    if vehicle_hits and not insurer_hits and not subtype_vehicle:
+        gaps.append(_gap(
+            "Vehicle costs without vehicle insurance",
+            f"{len(vehicle_hits)} vehicle-related transaction(s) but no vehicle insurer in "
+            f"this binder. Either the premium is paid elsewhere, is annual and outside the "
+            f"window, or the vehicle is uninsured.",
+            sorted({str(r.get("merchant_normalized") or "")[:40] for r in vehicle_hits if r.get("merchant_normalized")}),
+        ))
+
+    # (d) No energy retailer at all across the whole window.
+    if rows and not any(re.search(_ENERGY_RETAILER, _row_blob(r)) for r in rows):
+        days = sum(int(a.get("days_covered") or 0) for a in accounts)
+        util_subtypes = " ".join(utility_monthly).lower()
+        if not any(w in util_subtypes for w in ("power", "electric", "energy", "gas")):
+            gaps.append(_gap(
+                "No power or gas in the file",
+                f"No electricity or gas retailer appears in {days} statement-days. A household "
+                f"pays for energy somewhere - this binder does not show where.",
+                [],
+            ))
+
+    # (e) Large money out of the country close to the assessment date.
+    if assessment_date:
+        try:
+            asof = parse_date(assessment_date)
+        except (ValueError, TypeError):
+            asof = None
+        if asof:
+            recent = [
+                r for r in rows
+                if r.get("direction") == "outflow"
+                and abs(float(r.get("amount") or 0)) >= REMITTANCE_MIN_AMOUNT
+                and re.search(_REMITTER, _row_blob(r))
+                and 0 <= (asof - parse_date(r["date"])).days <= REMITTANCE_WINDOW_DAYS
+            ]
+            if recent:
+                total = sum(abs(float(r.get("amount") or 0)) for r in recent)
+                gaps.append(_gap(
+                    "Large offshore transfer before assessment",
+                    f"{len(recent)} remittance(s) totalling {total:.2f} left the country within "
+                    f"{REMITTANCE_WINDOW_DAYS} days of the assessment date. Excluded as one-off; "
+                    f"the reason for the transfer is not evidenced.",
+                    [f"{r['date']} {str(r.get('description') or '')[:40]} {abs(float(r.get('amount') or 0)):.2f}" for r in recent],
+                ))
+
+    return gaps
+
+
 def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) -> dict[str, Any]:
     txns = canonical.get("transactions") or []
     by_id = _index_classifications(classifications, txns)
@@ -526,7 +683,9 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
 
     joined = []
     for txn in txns:
-        cls = by_id.get(txn["transaction_id"], {})
+        cls = by_id.get(txn["transaction_id"])
+        classified = isinstance(cls, dict) and bool(cls)
+        cls = cls or {}
         category = cls.get("category") or "unclear"
         direction = txn.get("direction") or "info"
         amount = float(txn.get("amount") or 0)
@@ -539,6 +698,11 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         if business_flag == "yes":
             include = False
         resolved_account = _resolve_account_id(txn, accounts)
+        reason = str(cls.get("reason") or "").strip()
+        if not classified:
+            reason = "join miss - no classification for this transaction"
+        elif category == "unclear" and not reason:
+            reason = "model low confidence / ambiguous"
         joined.append(
             {
                 **txn,
@@ -550,7 +714,8 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "merchant_normalized": merchant,
                 "is_business": business_flag,
                 "business_reason": str(cls.get("business_reason") or "").strip(),
-                "reason": cls.get("reason") or "",
+                "reason": reason,
+                "classified": classified,
                 "utility_type": cls.get("utility_type"),
                 "insurance_type": cls.get("insurance_type"),
                 "account_id": resolved_account or txn.get("account_id"),
@@ -601,6 +766,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
     utility_monthly: dict[str, float] = defaultdict(float)
     insurance_monthly: dict[str, float] = defaultdict(float)
     business_monthly = 0.0
+    rent_cadence_notes: list[dict[str, Any]] = []
     account_by_id = {a.get("account_id"): a for a in accounts}
 
     for (category, merchant), rows in streams.items():
@@ -694,24 +860,51 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 / stream_months
             )
             # Repeating rent of $2,880 plus catch-up/fees must not average to
-            # $4,116. If the same charge posted at least twice, that amount is
-            # the monthly rent; the extras stay visible on Part 2.
-            if category == "rent_board_paid" and dominant_cluster_size(
-                [r["amount"] for r in rows]
-            ) >= 2:
-                monthly = monthly_equivalent(typical, "monthly")
+            # $4,116. If the same charge posted at least twice, start from
+            # that amount so extras stay visible on Part 2 — but multiply by
+            # how often it actually posted in the window. Four $2,880 charges
+            # in 3.02 months are not one month of rent.
+            rent_cluster_n = dominant_cluster_size([r["amount"] for r in rows])
+            if category == "rent_board_paid" and rent_cluster_n >= 2:
+                cadence = max(rent_cluster_n / stream_months, 1.0)
+                monthly = typical * cadence
+                if cadence > 1.0:
+                    rent_cadence_notes.append(
+                        {
+                            "topic": "Rent cadence",
+                            "note": (
+                                f"{merchant}: repeating ${typical:.2f} posted "
+                                f"{rent_cluster_n} times in {stream_months:.2f} months "
+                                f"(not a clean monthly cycle). Monthly figure is "
+                                f"typical × max(n/months, 1) = ${monthly:.2f}. "
+                                f"Extra/catch-up amounts stay on Part 2 and are "
+                                f"not monthlyised. Do not use the all-in run-rate "
+                                f"(${run_rate:.2f})."
+                            ),
+                            "requires_signoff": True,
+                        }
+                    )
         elif freq == "one_off" or freq == "unknown":
             monthly = 0.0
         else:
             monthly = monthly_equivalent(typical, freq)
 
         dates_observed = sorted({r["date"] for r in rows})
+        rent_cluster_n = dominant_cluster_size([r["amount"] for r in rows])
+        rent_cadence_adjusted = (
+            freq == "irregular"
+            and category == "rent_board_paid"
+            and rent_cluster_n >= 2
+        )
         calculation_basis = (
             (
-                f"dominant repeating amount; extras not monthlyised"
-                if freq == "irregular"
-                and category == "rent_board_paid"
-                and dominant_cluster_size([r["amount"] for r in rows]) >= 2
+                (
+                    f"dominant repeating amount × {rent_cluster_n}/{stream_months:.2f} "
+                    f"months; extras not monthlyised"
+                    if rent_cluster_n / stream_months > 1.0
+                    else "dominant repeating amount; extras not monthlyised"
+                )
+                if rent_cadence_adjusted
                 else f"observed outflows / {stream_months:.2f} months{window_clause}"
             )
             if freq == "irregular"
@@ -821,6 +1014,11 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     exclusion = why if why.startswith("business") else f"business / non-household: {why}"
                 elif category in INCOME:
                     exclusion = "income"
+                elif category == "unclear":
+                    if not r.get("classified"):
+                        exclusion = "no classification joined"
+                    else:
+                        exclusion = r.get("reason") or "model low confidence / unclear"
                 elif freq == "one_off":
                     exclusion = "single observation - no cadence provable"
                 elif category in EXCLUSIONS:
@@ -833,6 +1031,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     "date": r["date"],
                     "description": r["description"],
                     "amount": r["amount"],
+                    "direction": r.get("direction") or "info",
                     "frequency": freq,
                     "include": "Yes" if line_include else "No",
                     "category": category,
@@ -840,6 +1039,8 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     "source_file": r.get("source_file"),
                     "account": acct.get("account_label") or acct.get("institution") or "Not provided in binder",
                     "exclusion_reason": exclusion,
+                    "reason": r.get("reason") or "",
+                    "classified": bool(r.get("classified")),
                     "needs_review": category in {"unclear", "underwriter_manual"}
                     or business_flag in {"yes", "review"},
                     "is_business": business_flag,
@@ -855,6 +1056,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "date": r["date"],
                 "description": r["description"],
                 "amount": r["amount"],
+                "direction": r.get("direction") or "info",
                 "frequency": "one_off",
                 "include": "No",
                 "category": r.get("category"),
@@ -862,6 +1064,8 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "source_file": r.get("source_file"),
                 "account": acct.get("account_label") or acct.get("institution") or "Not provided in binder",
                 "exclusion_reason": "duplicate extraction (descriptions match after bank prefix/suffix strip)",
+                "reason": r.get("reason") or "",
+                "classified": bool(r.get("classified")),
                 "needs_review": True,
                 "is_business": r.get("is_business") or "no",
             }
@@ -934,6 +1138,15 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
     discretionary = round(category_monthly.get("recreation_entertainment", 0.0), 2)
     unclear_manual = sum(1 for r in joined if r["category"] in {"unclear", "underwriter_manual"})
     extraction_errors = canonical.get("errors") or []
+    applicant = canonical.get("applicant") or {
+        "Full Name(s)": "Not provided in binder",
+        "Age(s)": "Not provided in binder",
+        "Dependants": "Not provided in binder",
+        "Address and living situation": "Not provided in binder",
+    }
+    gaps = evidence_gaps(
+        joined, accounts, applicant, assessment_date, insurance_monthly, utility_monthly
+    )
     underwriter_notes = [
         {"topic": "File quality", "note": f"{len(accounts)} statement records; {len(txns)} canonical rows; {len(extraction_errors)} extraction errors.", "requires_signoff": bool(extraction_errors)},
         {
@@ -953,6 +1166,53 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         {"topic": "Discretionary spend", "note": f"Recreation and entertainment monthly equivalent: {discretionary:.2f}.", "requires_signoff": discretionary > 0},
         {"topic": "Unclear/manual", "note": f"{unclear_manual} transactions require manual review or remain unclear.", "requires_signoff": unclear_manual > 0},
     ]
+    join_miss = sum(
+        1 for r in joined
+        if r["category"] == "unclear" and not r.get("classified")
+    )
+    model_unclear = sum(
+        1 for r in joined
+        if r["category"] == "unclear" and r.get("classified")
+    )
+    if join_miss or model_unclear:
+        underwriter_notes.append(
+            {
+                "topic": "Unclear sources",
+                "note": (
+                    f"{join_miss} join-miss (no classification); "
+                    f"{model_unclear} model unclear/low confidence."
+                ),
+                "requires_signoff": True,
+            }
+        )
+    underwriter_notes.append(
+        {
+            "topic": "Evidence gaps",
+            "note": (
+                f"{len(gaps)} evidence gap(s) detected - see the Evidence gaps block: "
+                + "; ".join(g["topic"] for g in gaps)
+                if gaps
+                else "No evidence gaps detected by the automated checks."
+            ),
+            "requires_signoff": bool(gaps),
+        }
+    )
+    unclear_in = [r for r in joined if r["category"] == "unclear" and r.get("direction") == "inflow"]
+    unclear_out = [r for r in joined if r["category"] == "unclear" and r.get("direction") == "outflow"]
+    if unclear_in or unclear_out:
+        in_sum = sum(abs(float(r.get("amount") or 0)) for r in unclear_in)
+        out_sum = sum(abs(float(r.get("amount") or 0)) for r in unclear_out)
+        underwriter_notes.append(
+            {
+                "topic": "Unclear by direction",
+                "note": (
+                    f"{len(unclear_in)} inflow ${in_sum:.2f}; "
+                    f"{len(unclear_out)} outflow ${out_sum:.2f}."
+                ),
+                "requires_signoff": True,
+            }
+        )
+    underwriter_notes.extend(rent_cadence_notes)
     if business_classification_missing:
         underwriter_notes.insert(
             0,
@@ -969,12 +1229,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
 
     return {
         "assessment_date": assessment_date,
-        "applicant": canonical.get("applicant") or {
-            "Full Name(s)": "Not provided in binder",
-            "Age(s)": "Not provided in binder",
-            "Dependants": "Not provided in binder",
-            "Address and living situation": "Not provided in binder",
-        },
+        "applicant": applicant,
         "accounts": accounts,
         "document_index": canonical.get("document_index") or [
             {
@@ -1016,6 +1271,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 [{"merchant": m, "hits": n} for m, n in hits.items() if n >= 3],
                 key=lambda r: (-r["hits"], r["merchant"]),
             ),
+            "evidence_gaps": gaps,
             "underwriter_notes": underwriter_notes,
         },
         "audit": {

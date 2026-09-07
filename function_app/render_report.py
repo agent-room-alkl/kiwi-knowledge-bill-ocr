@@ -161,12 +161,14 @@ def build_workbook(summary: dict[str, Any], applicant: dict[str, Any] | None = N
             "Date",
             "Description",
             "Amount",
+            "Direction",
             "Frequency",
             "Include",
             "Category",
             "Source file",
             "Account",
             "Exclusion reason",
+            "Reason",
             "Needs review",
             "Is business",
         ]
@@ -177,12 +179,14 @@ def build_workbook(summary: dict[str, Any], applicant: dict[str, Any] | None = N
                 _as_excel_date(row.get("date")),
                 row.get("description"),
                 row.get("amount"),
+                row.get("direction"),
                 row.get("frequency"),
                 row.get("include"),
                 row.get("category"),
                 row.get("source_file"),
                 row.get("account"),
                 row.get("exclusion_reason"),
+                row.get("reason"),
                 "Yes" if row.get("needs_review") else "No",
                 _business_cell(row.get("is_business")),
             ]
@@ -283,6 +287,19 @@ def build_workbook(summary: dict[str, Any], applicant: dict[str, Any] | None = N
     for row in (summary.get("part5") or {}).get("high_frequency") or []:
         ws.append([row.get("merchant"), row.get("hits")])
     ws.append([])
+    gaps = (summary.get("part5") or {}).get("evidence_gaps") or []
+    if gaps:
+        ws.append(["Evidence gaps", "What is missing", "Evidence", "Requires sign-off"])
+        for row in gaps:
+            ws.append(
+                [
+                    row.get("topic"),
+                    row.get("note"),
+                    row.get("evidence"),
+                    "Yes" if row.get("requires_signoff") else "No",
+                ]
+            )
+        ws.append([])
     ws.append(["Underwriter audit notes", "Note", "Requires sign-off"])
     notes = (summary.get("part5") or {}).get("underwriter_notes") or []
     if not notes:

@@ -364,7 +364,15 @@ def test_mixed_amounts_use_dominant_cluster_not_median():
     )
     rent = out["audit"]["rent_monthly"]
     assert abs(rent - 1800) > 1, f"mixed median leaked: {rent}"
-    assert 2800 <= rent <= 3000, f"expected repeating $2880 rent, not window-average $4116, got {rent}"
+    assert abs(rent - 4116) > 50, f"extras monthlyised into run-rate: {rent}"
+    # 4 × $2,880 over 92 days (3.02 months) → ~$3,814, not a flat $2,880.
+    assert 3800 <= rent <= 3830, f"expected 2880×4/3.02 ≈ 3814, got {rent}"
+    cadence_notes = [
+        n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Rent cadence"
+    ]
+    assert cadence_notes, "irregular rent cadence must land a Part5 note"
+    assert "3811" in cadence_notes[0]["note"] or "3814" in cadence_notes[0]["note"]
+    assert "extras" in cadence_notes[0]["note"].lower() or "not monthlyised" in cadence_notes[0]["note"].lower()
 
 
 def test_same_day_salary_rows_merge_before_typical():
@@ -680,6 +688,108 @@ def test_variable_grocery_is_not_weeklyised_from_one_outlier():
     assert calc["assessed_frequency"] != "weekly" or calc["dominant_amount"] < 150
 
 
+def test_part2_exposes_direction_and_unclear_split():
+    txns = [
+        _txn("in1", "2026-07-02", "Direct Credit MISS Y ZHANG", 40, "inflow", "MISS Y ZHANG"),
+        _txn("out1", "2026-07-03", "PAY Xiuyuan zhang", 30, "outflow", "XIUYUAN ZHANG"),
+        _txn("rent1", "2026-07-04", "PAY Barfoot", 2880, "outflow", "BARFOOT"),
+    ]
+    cls = [
+        _cls("in1", "unclear", False),
+        _cls("out1", "unclear", False),
+        _cls("rent1", "rent_board_paid", True, "monthly"),
+    ]
+    out = compute_summary(
+        {"assessment_date": "2026-09-02", "accounts": [
+            {"account_id": "a1", "period_start": "2026-07-01", "period_end": "2026-07-31"}
+        ], "transactions": txns},
+        {"assessment_date": "2026-09-02", "classifications": cls},
+    )
+    by_id = {r["transaction_id"]: r for r in out["part2"]}
+    assert by_id["in1"]["direction"] == "inflow"
+    assert by_id["out1"]["direction"] == "outflow"
+    rent = next(r["monthly_equivalent"] for r in out["part1"] if r["category"] == "Rent / board paid")
+    assert rent == 2880
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear by direction")
+    assert "1 inflow $40.00" in note["note"]
+    assert "1 outflow $30.00" in note["note"]
+
+
+def test_evidence_gaps_five_families_do_not_move_money():
+    txns = [
+        _txn("a", "2026-08-01", "ASB A325032 ASB Sunnynook", 160, "outflow", "ASB"),
+        _txn("b", "2026-07-15", "WAIRAU INTERMEDIATE SCHOOL", 100, "outflow", "WAIRAU INTERMEDIATE"),
+        _txn("c", "2026-07-20", "AA ALBANY", 98.80, "outflow", "AA ALBANY"),
+        _txn("d", "2026-08-13", "REMITLY", 2003.99, "outflow", "REMITLY"),
+        _txn("e", "2026-07-04", "PAY Barfoot", 2880, "outflow", "BARFOOT"),
+    ]
+    cls = [
+        _cls("a", "unclear", False),
+        _cls("b", "unclear", False),
+        _cls("c", "unclear", False),
+        _cls("d", "one_off", False),
+        _cls("e", "rent_board_paid", True, "monthly"),
+    ]
+    out = compute_summary(
+        {
+            "assessment_date": "2026-09-07",
+            "applicant": {"Dependants": "Not provided in binder"},
+            "accounts": [
+                {
+                    "account_id": "a1",
+                    "institution": "Kiwibank",
+                    "period_start": "2026-05-20",
+                    "period_end": "2026-08-19",
+                    "days_covered": 92,
+                }
+            ],
+            "transactions": txns,
+        },
+        {"assessment_date": "2026-09-07", "classifications": cls},
+    )
+    topics = [g["topic"] for g in out["part5"]["evidence_gaps"]]
+    for expected in (
+        "Account outside binder - ASB",
+        "Dependants not recorded",
+        "Vehicle costs without vehicle insurance",
+        "No power or gas in the file",
+        "Large offshore transfer before assessment",
+    ):
+        assert expected in topics, topics
+    assert out["audit"]["rent_monthly"] == 2880
+    assert out["recommended_monthly_living"] == 2880
+
+
+def test_unclear_reason_is_not_literal_and_sources_split():
+    txns = [
+        _txn("miss", "2026-07-02", "UNKNOWN MERCHANT XYZ", 12, "outflow", "UNKNOWN MERCHANT XYZ"),
+        _txn("low", "2026-07-03", "PAY Xiuyuan zhang", 30, "outflow", "XIUYUAN ZHANG"),
+        _txn("rent1", "2026-07-04", "PAY Barfoot", 2880, "outflow", "BARFOOT"),
+    ]
+    cls = [
+        _cls("low", "unclear", False, reason="person-name P2P, confidence 0.31"),
+        _cls("rent1", "rent_board_paid", True, "monthly"),
+    ]
+    out = compute_summary(
+        {"assessment_date": "2026-09-02", "accounts": [
+            {"account_id": "a1", "period_start": "2026-07-01", "period_end": "2026-07-31"}
+        ], "transactions": txns},
+        {"assessment_date": "2026-09-02", "classifications": cls},
+    )
+    by_id = {r["transaction_id"]: r for r in out["part2"]}
+    assert by_id["miss"]["classified"] is False
+    assert by_id["miss"]["exclusion_reason"] == "no classification joined"
+    assert by_id["low"]["classified"] is True
+    assert by_id["low"]["reason"] == "person-name P2P, confidence 0.31"
+    assert by_id["low"]["exclusion_reason"] == "person-name P2P, confidence 0.31"
+    assert by_id["low"]["exclusion_reason"] != "unclear"
+    rent = next(r["monthly_equivalent"] for r in out["part1"] if r["category"] == "Rent / board paid")
+    assert rent == 2880
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear sources")
+    assert "1 join-miss" in note["note"]
+    assert "1 model unclear" in note["note"]
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -702,6 +812,9 @@ if __name__ == "__main__":
         test_missing_is_business_is_a_visible_warning_not_a_clean_zero,
         test_extract_duplicate_is_dropped_genuine_repeats_sum,
         test_variable_grocery_is_not_weeklyised_from_one_outlier,
+        test_part2_exposes_direction_and_unclear_split,
+        test_evidence_gaps_five_families_do_not_move_money,
+        test_unclear_reason_is_not_literal_and_sources_split,
     ]
     for fn in tests:
         fn()

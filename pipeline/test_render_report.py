@@ -130,6 +130,9 @@ def test_renderer_writes_original_prompt_blocks():
     assert wb["Part4 Liabilities"]["A2"].value == "Westpac"
     assert wb["Part5 Commentary"]["B2"].value == 28800
     assert wb["Part5 Commentary"]["C2"].value == "rent_board_paid"
+    part2_headers = [c.value for c in wb["Part2 Line items"][1]]
+    assert "Direction" in part2_headers
+    assert part2_headers[part2_headers.index("Amount") + 1] == "Direction"
 
 
 def test_missing_is_business_warning_is_on_part5_not_only_json():
@@ -156,6 +159,35 @@ def test_missing_is_business_warning_is_on_part5_not_only_json():
     assert "is_business" in blob
 
 
+def test_part2_writes_direction_column():
+    summary = {
+        "assessment_date": "2026-09-01",
+        "part2": [
+            {
+                "date": "2026-07-02",
+                "description": "Direct Credit MISS Y ZHANG",
+                "amount": 40,
+                "direction": "inflow",
+                "frequency": "irregular",
+                "include": "No",
+                "category": "unclear",
+                "source_file": "ANZ.pdf",
+                "account": "ANZ",
+                "exclusion_reason": "unclear",
+                "needs_review": True,
+            }
+        ],
+        "part4": [],
+        "part5": {},
+    }
+    wb = load_workbook(BytesIO(build_workbook(summary)))
+    headers = [c.value for c in next(wb["Part2 Line items"].iter_rows(min_row=1, max_row=1))]
+    assert "Direction" in headers
+    assert headers.index("Direction") == headers.index("Amount") + 1
+    assert "Reason" in headers
+    assert wb["Part2 Line items"]["D2"].value == "inflow"
+
+
 def test_empty_part4_is_labelled_not_header_only():
     summary = {
         "assessment_date": "2026-09-01",
@@ -174,4 +206,6 @@ if __name__ == "__main__":
     print("ok test_empty_part4_is_labelled_not_header_only")
     test_missing_is_business_warning_is_on_part5_not_only_json()
     print("ok test_missing_is_business_warning_is_on_part5_not_only_json")
+    test_part2_writes_direction_column()
+    print("ok test_part2_writes_direction_column")
     print("ALL PASS")
