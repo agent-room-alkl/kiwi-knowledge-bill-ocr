@@ -110,6 +110,28 @@ def test_repair_passes_send_only_the_new_entries():
     assert "Requires batch_id" in props["merge_classifications"]["description"]
 
 
+def test_conversion_lines_are_classified_by_their_merchant():
+    """The old rule now fights the extractor.
+
+    It told the model that any `USD @ ... conversion rate` text was not a
+    purchase. The extractor now appends the merchant from the fee row, so
+    that rule would send 32 identified OpenAI, Anthropic and Vercel charges
+    straight back to unclear.
+    """
+    for name in (
+        "PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt",
+        "prompt-foundry-v2.md",
+        "agent-instructions.md",
+        "prompt-foundry-xlsx-now.md",
+    ):
+        raw = (ROOT / "foundry" / name).read_text(encoding="utf-8")
+        # The prompts are hard-wrapped, so a phrase can straddle a newline.
+        text = " ".join(raw.split())
+        assert "line IS a purchase" in text, name
+        assert "merchant not printed" in text, name
+        assert "OPENAI" in text.upper(), name
+
+
 if __name__ == "__main__":
     test_side_business_receipts_are_not_salary_or_living()
     print("ok test_side_business_receipts_are_not_salary_or_living")
@@ -123,4 +145,6 @@ if __name__ == "__main__":
     print("ok test_c9_warns_and_still_renders_instead_of_blocking")
     test_repair_passes_send_only_the_new_entries()
     print("ok test_repair_passes_send_only_the_new_entries")
+    test_conversion_lines_are_classified_by_their_merchant()
+    print("ok test_conversion_lines_are_classified_by_their_merchant")
     print("ALL PASS")

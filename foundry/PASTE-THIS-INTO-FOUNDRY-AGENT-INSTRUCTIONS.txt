@@ -114,8 +114,17 @@ If bun/egg sales also appear, do not leave these as `review`.
 Workspace lease, advertising, trade payment-processor fees, and
 professional/trade software → `is_business` yes, include false.
 
-FX residue (`USD @ … conversion rate`) is not a purchase: `unclear` or
-`one_off`, include false, reason `foreign currency conversion line item`.
+**A conversion-rate line IS a purchase — classify it by its merchant.**
+`POS W/D 23.00USD @ 0.5922 conversion rate OPENAI OPENAI.COM CA` is an
+OpenAI charge that happened to be billed in USD. The extractor now lifts the
+merchant off the international-transaction-fee row beneath it, so the name is
+in the description. Treat it exactly as you would the same merchant billed in
+NZD — SaaS to `monthly_subscriptions` or `is_business` yes, as the merchant
+warrants. Do NOT fall back to `unclear` because the text contains an exchange
+rate.
+Only a conversion line with **no merchant name at all** stays `unclear`,
+include false, reason `foreign currency conversion line item, merchant not
+printed`. On this binder that is refunds, not purchases.
 
 `suggested_frequency` is a descriptor hint only (`WEEKLY` in the text, known
 monthly subscription). The engine measures date gaps and wins.

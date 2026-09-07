@@ -60,7 +60,7 @@ Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering channel) 
 
 Workspace lease (IWG/Regus-type), advertising (Google Ads-type), trade payment-processor fees (GoCardless-type), and professional/trade software → `is_business` yes, include false — not household subscriptions.
 
-FX residue (`USD @ … conversion rate`) is not a purchase: `unclear` or `one_off`, include false, reason `foreign currency conversion line item`.
+**A conversion-rate line IS a purchase — classify it by its merchant.** The extractor lifts the merchant off the international-transaction-fee row beneath, so `... conversion rate OPENAI OPENAI.COM CA` is an OpenAI charge billed in USD; treat it as you would the same merchant in NZD. Never fall back to `unclear` because the text contains an exchange rate. Only a conversion line with no merchant name at all stays `unclear`, include false, reason `foreign currency conversion line item, merchant not printed`.
 
 If `category` is `insurance`, set `insurance_type`. If `utilities`, set `utility_type`.
 

@@ -156,7 +156,7 @@ Hard classification rules:
 - Repeated small inflows from many personal names (bun / egg / food-sale notes) → `business_receipts`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `unclear` (that means the file could not tell; you could). Never `salary_wages` or `other_income` (those enter Part 1.4 Income as assessable). Never recommended living.
 - Wholesale / catering stock (trade wholesaler / Foodstuffs catering channel) → `is_business` yes, include false, COGS — not household grocery when bun/egg sales also appear.
 - Workspace lease, advertising, trade processor fees, professional software → `is_business` yes, include false.
-- FX `USD @ conversion rate` residue → `unclear` or `one_off`, include false, not a purchase.
+- A `USD @ conversion rate` line IS a purchase: the merchant is appended from the international-transaction-fee row (`... conversion rate OPENAI OPENAI.COM CA`). Classify by that merchant, as you would the same merchant in NZD. Only a conversion line with no merchant at all stays `unclear`, reason `foreign currency conversion line item, merchant not printed`.
 - `unclear` is required when confidence is below 0.60; include the reason in Part 5.
 
 `Include = Yes` only for recurring household living outflows that feed recommended living. It is `No` for income, transfers, debt repayments, interest, reimbursements, KiwiSaver/savings, donations, one-off items, and manual/unclear items.
