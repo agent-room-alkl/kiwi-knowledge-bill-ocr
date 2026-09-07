@@ -1437,6 +1437,14 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         "audit": {
             "transaction_count": len(txns),
             "assessable_income_monthly": assessable_income_monthly,
+            # What C9 actually wants to know. One merchant classification
+            # covers every row of that merchant, so comparing the number of
+            # classification objects against the number of transactions is a
+            # comparison between two different things - 238 merchants will
+            # never equal 611 rows. This counts rows that came out of the
+            # join with no classification at all.
+            "join_miss_rows": sum(1 for r in joined if not r.get("classified")),
+            "classified_rows": sum(1 for r in joined if r.get("classified")),
             "side_business_gross_monthly": round(
                 sum(
                     float(r.get("monthly_equivalent") or 0)

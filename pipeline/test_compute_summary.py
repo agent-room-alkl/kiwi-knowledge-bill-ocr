@@ -1096,6 +1096,37 @@ def test_no_side_business_line_when_there_is_no_trading_shape():
     assert out["audit"]["side_business_gross_monthly"] == 0
 
 
+def test_audit_counts_join_misses_not_classification_objects():
+    """C9 needs rows that resolved, not the size of the classifications list.
+
+    One merchant entry classifies every row of that merchant, so a binder of
+    611 rows is legitimately covered by 238 objects. Comparing those two
+    numbers fails a correct run every time; counting unresolved rows does not.
+    """
+
+    txns = [
+        _txn("m1", "2026-06-04", "PAK N SAVE W", 80, "outflow", "PAK N SAVE W"),
+        _txn("m2", "2026-06-11", "PAK N SAVE W", 90, "outflow", "PAK N SAVE W"),
+        _txn("m3", "2026-06-18", "PAK N SAVE W", 85, "outflow", "PAK N SAVE W"),
+        _txn("x1", "2026-06-20", "SOMETHING UNSEEN", 40, "outflow", "SOMETHING UNSEEN"),
+    ]
+    # One merchant-keyed classification for three rows, and nothing for x1.
+    cls = [{
+        "merchant": "PAK N SAVE W",
+        "category": "food_grocery_clothing_personal_care",
+        "include_in_living_expenses": True,
+        "confidence": 0.9,
+        "reason": "supermarket",
+        "suggested_frequency": "weekly",
+    }]
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    audit = out["audit"]
+    assert audit["join_miss_rows"] == 1, audit
+    assert audit["classified_rows"] == 3 + 2, audit  # 3 grocery + 2 rent rows
+    # The naive C9 comparison would have failed this correct run.
+    assert len(cls) != len(txns)
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1132,6 +1163,7 @@ if __name__ == "__main__":
         test_business_receipts_do_not_silence_the_unresolved_spend_note,
         test_trading_turnover_gets_its_own_income_line_outside_assessable_income,
         test_no_side_business_line_when_there_is_no_trading_shape,
+        test_audit_counts_join_misses_not_classification_objects,
     ]
     for fn in tests:
         fn()

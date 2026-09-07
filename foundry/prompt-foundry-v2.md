@@ -76,9 +76,12 @@ Use `transaction_id` instead of `merchant` only when one row truly differs
 from the rest of that merchant. Never invent ids. Schema has
 `additionalProperties: false` and no amount field — do not restate amounts.
 
-**Classify every worklist `transaction_id`.** Omitting an id is a join-miss
-(the engine then shows unclear with no model reason). Prefer `unclear` plus
-a reason over dropping the row. **C9** is this check.
+**Every worklist entry must be classified.** Classify by merchant - one
+entry covers all that merchant's rows - and leave nothing on the list.
+A merchant you skip becomes a join-miss: the engine shows those rows unclear
+with no model reason, and `audit.join_miss_rows` counts them. Prefer
+`unclear` plus a reason over dropping an entry. **C9** reads that count, not
+the length of your classifications array.
 
 **Classify inflows too.** Salary / employer payroll → `salary_wages`;
 WINZ/WFF → `benefit`; rent received → `rental_income`. Own-account moves →
@@ -164,7 +167,12 @@ Any FAIL → do not render; report `SELFCHECK_FAILED` with the C-numbers.
   gross turnover the engine reports for visibility, and a binder whose
   salary went unclassified would otherwise pass C8 on turnover alone.
   `audit.assessable_income_monthly == 0` is the check
-- C9 classification count ≠ canonical transaction count
+- C9 `audit.join_miss_rows` > 0 → some canonical rows resolved to no
+  classification. Do NOT compare the length of `classifications` against the
+  transaction count: one merchant entry covers every row of that merchant,
+  so 238 merchant entries legitimately classify 611 rows and that comparison
+  fails a correct run every time. Go back to step 2, classify the merchants
+  the worklist still lists, re-run compute — do not extract again
 - C10 >15% unclear → WARN only, still render. Report the count in the
   six-line summary. Do not treat C10 as SELFCHECK_FAILED.
 - C11 `part4` field absent (empty array OK only with no-liability status)

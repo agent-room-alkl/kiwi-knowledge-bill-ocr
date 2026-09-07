@@ -51,6 +51,20 @@ def test_selfcheck_ignores_side_business_turnover_when_judging_empty_income():
         assert "turnover alone" in text, name
 
 
+def test_c9_reads_join_misses_not_the_length_of_the_classifications_array():
+    """The old C9 failed every correct run.
+
+    Merchant-level classification is what the same file asks for two pages
+    earlier, so the classifications array is shorter than the transaction
+    list by design. C9 has to count rows that resolved to nothing.
+    """
+    for name in ("PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt", "prompt-foundry-v2.md"):
+        text = (ROOT / "foundry" / name).read_text(encoding="utf-8")
+        assert "audit.join_miss_rows" in text, name
+        assert "classification count ≠ canonical transaction count" not in text, name
+        assert "one merchant entry covers every row" in text, name
+
+
 if __name__ == "__main__":
     test_side_business_receipts_are_not_salary_or_living()
     print("ok test_side_business_receipts_are_not_salary_or_living")
@@ -58,4 +72,6 @@ if __name__ == "__main__":
     print("ok test_xlsx_prompt_has_the_same_side_business_rules")
     test_selfcheck_ignores_side_business_turnover_when_judging_empty_income()
     print("ok test_selfcheck_ignores_side_business_turnover_when_judging_empty_income")
+    test_c9_reads_join_misses_not_the_length_of_the_classifications_array()
+    print("ok test_c9_reads_join_misses_not_the_length_of_the_classifications_array")
     print("ALL PASS")
