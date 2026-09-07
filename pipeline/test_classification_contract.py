@@ -87,7 +87,27 @@ def test_c9_warns_and_still_renders_instead_of_blocking():
         assert "C9 does not stop the render" in text, name
         assert "render" in text and "anyway" in text, name
         assert "Never" in text and "treat C9 as SELFCHECK_FAILED" in text, name
-        assert "exhausts the context window" in text, name
+        assert "exhausts your context window" in text, name
+
+
+def test_repair_passes_send_only_the_new_entries():
+    """The retry loop must not resend the whole classification set.
+
+    That is what exhausted the agent's context window on a 238-merchant
+    binder. The server now accumulates per batch, so a repair pass carries
+    only what it just decided.
+    """
+    for name in ("PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt", "prompt-foundry-v2.md"):
+        text = (ROOT / "foundry" / name).read_text(encoding="utf-8")
+        assert "merge_classifications" in text, name
+        assert "only the entries you just" in text, name
+        assert "exhausts your context window" in text, name
+
+    import json
+    spec = json.loads((ROOT / "foundry" / "openapi-servicing.json").read_text(encoding="utf-8"))
+    props = spec["paths"]["/compute_summary"]["post"]["requestBody"]["content"]["application/json"]["schema"]["properties"]
+    assert props["merge_classifications"]["type"] == "boolean"
+    assert "Requires batch_id" in props["merge_classifications"]["description"]
 
 
 if __name__ == "__main__":
@@ -101,4 +121,6 @@ if __name__ == "__main__":
     print("ok test_c9_reads_join_misses_not_the_length_of_the_classifications_array")
     test_c9_warns_and_still_renders_instead_of_blocking()
     print("ok test_c9_warns_and_still_renders_instead_of_blocking")
+    test_repair_passes_send_only_the_new_entries()
+    print("ok test_repair_passes_send_only_the_new_entries")
     print("ALL PASS")

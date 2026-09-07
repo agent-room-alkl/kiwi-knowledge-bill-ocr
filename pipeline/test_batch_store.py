@@ -300,6 +300,65 @@ raises(
 )
 
 print()
+print("== incremental classifications: a retry sends only what is new ==")
+
+bid = E.validate_batch_id("68b6a1f0T0c3d5e-9f2c4a7b1d8e0f36")
+
+first = [
+    {"merchant": "PAK N SAVE W", "category": "food_grocery_clothing_personal_care"},
+    {"merchant": "BARFOOT & THOMPSON", "category": "rent_board_paid"},
+]
+merged, stats = E.merge_classifications(bid, first)
+check("first pass stores what it was sent", len(merged) == 2, stats)
+check("nothing was known before", stats["known_before"] == 0, stats)
+
+# The repair pass sends ONE merchant, not the two it already decided.
+second = [{"merchant": "AUCKLAND TRANSPORT", "category": "transport"}]
+merged, stats = E.merge_classifications(bid, second)
+check(
+    "a one-entry retry still yields the full set",
+    len(merged) == 3 and stats["sent_this_call"] == 1,
+    stats,
+)
+check("the earlier entries were retained", stats["known_before"] == 2, stats)
+check("the new entry is counted as added", stats["added"] == 1 and stats["replaced"] == 0, stats)
+by_merchant = {r.get("merchant"): r for r in merged}
+check(
+    "all three merchants present after a partial resend",
+    set(by_merchant) == {"PAK N SAVE W", "BARFOOT & THOMPSON", "AUCKLAND TRANSPORT"},
+    sorted(by_merchant),
+)
+
+# A correction is a resend of that one entry: last write wins, deterministically.
+merged, stats = E.merge_classifications(
+    bid, [{"merchant": "AUCKLAND TRANSPORT", "category": "underwriter_manual"}]
+)
+by_merchant = {r.get("merchant"): r for r in merged}
+check(
+    "resending an entry replaces it rather than duplicating",
+    len(merged) == 3 and by_merchant["AUCKLAND TRANSPORT"]["category"] == "underwriter_manual",
+    stats,
+)
+check("the replacement is counted as replaced", stats["replaced"] == 1 and stats["added"] == 0, stats)
+
+# Merchant-level and per-row decisions are different keys, so a row-level
+# correction can sit alongside the merchant rule it overrides.
+merged, _ = E.merge_classifications(bid, [{"transaction_id": "t7", "category": "one_off"}])
+check("a transaction_id entry does not collide with a merchant entry", len(merged) == 4)
+
+# A merchant-less, id-less row is not a decision about anything.
+merged, stats = E.merge_classifications(bid, [{"category": "transport"}])
+check("an entry naming neither merchant nor transaction is dropped", stats["added"] == 0, stats)
+
+E.merge_classifications(bid, [])
+merged, stats = E.merge_classifications(bid, [])
+check("an empty retry changes nothing", len(merged) == 4 and stats["total"] == 4, stats)
+
+other = E.validate_batch_id("68b6a1f0T0c3d5e-9f2c4a7b1d8e0f37")
+merged, stats = E.merge_classifications(other, [{"merchant": "X", "category": "transport"}])
+check("a different batch starts empty", stats["known_before"] == 0 and len(merged) == 1, stats)
+
+print()
 if FAILURES:
     print(f"FAILED ({len(FAILURES)}): " + ", ".join(FAILURES))
     raise SystemExit(1)

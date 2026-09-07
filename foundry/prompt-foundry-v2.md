@@ -165,13 +165,17 @@ joined`, counts them in `audit.join_miss_rows`, and splits them out in
 Part 5 "Unclear sources". A workbook that says "145 of 611 rows carry no
 classification" is worth more to an underwriter than no workbook at all.
 
-So: make **one** repair pass at C9 - classify the merchants it names
-(`unclear` with a reason is a valid answer, a guess is not) and re-run
-`compute_summary`. If rows remain unresolved after that pass, **render
-anyway** and say so in the closing summary: how many rows, and that they are
-excluded from every total. Do not retry past one pass; resending the whole
-classification set repeatedly is what exhausts the context window, and
-stopping at C9 with a list and no workbook is a refusal to finish the work.
+So: make a repair pass at C9 - classify the merchants it names (`unclear`
+with a reason is a valid answer, a guess is not) and call `compute_summary`
+again with **`merge_classifications: true`** and **only the entries you just
+worked out**. The server keeps what you sent before and merges; resending the
+whole set is what exhausts your context window. `classification_store` in the
+response tells you what it now holds.
+
+Repeat that while `audit.join_miss_rows` is falling, up to three passes. When
+rows remain unresolved, **render anyway** and say so in the closing summary:
+how many rows, and that they are excluded from every total. Stopping at C9
+with a list and no workbook is a refusal to finish the work.
 
 Report `SELFCHECK_FAILED` with the C-numbers when a check is not repairable,
 or when three repair passes have not cleared C8/C9 — then say what you tried

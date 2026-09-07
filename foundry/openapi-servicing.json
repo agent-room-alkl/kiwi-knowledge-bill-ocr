@@ -208,6 +208,10 @@
                   "classifications": {
                     "type": "object",
                     "description": "{assessment_date, classifications:[...]}. Each entry names either a `merchant` from classification_worklist (preferred - it covers every row of that merchant) or a `transaction_id` for a single exceptional row. A per-row entry overrides the merchant-level one."
+                  },
+                  "merge_classifications": {
+                    "type": "boolean",
+                    "description": "Set true on a repair pass. The server keeps the classifications it has already been given for this batch_id and merges in what you send now, so send ONLY the merchants you just worked out - not the ones you decided earlier. Resending the whole set on every retry is what exhausts your context window on a real binder. Last write wins, so correcting an entry means sending that one entry again. Requires batch_id."
                   }
                 }
               }

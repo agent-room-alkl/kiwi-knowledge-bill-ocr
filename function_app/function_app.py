@@ -22,6 +22,7 @@ from extract_normalize import (  # noqa: E402
     ExtractionError,
     extract_and_normalize as _extract_and_normalize,
     load_batch as _load_batch,
+    merge_classifications as _merge_classifications,
     publish_report as _publish_report,
     store_batch as _store_batch,
 )
@@ -186,6 +187,21 @@ def compute_summary_http(req: func.HttpRequest) -> func.HttpResponse:
         body = _json(req)
         classifications = body.get("classifications") or {}
         batch_id = body.get("batch_id")
+        # Repair passes send only what they just classified. Without this the
+        # agent has to resend all 238 merchants every time, which is what ran
+        # it out of context window on a real binder.
+        merge_store = bool(body.get("merge_classifications"))
+        store_stats = None
+        if merge_store:
+            if not batch_id:
+                raise ValueError(
+                    "merge_classifications needs batch_id: the accumulated set "
+                    "is keyed by the batch it belongs to"
+                )
+            merged_rows, store_stats = _merge_classifications(
+                batch_id, classifications.get("classifications") or []
+            )
+            classifications = {**classifications, "classifications": merged_rows}
 
         if batch_id:
             canonical = _load_batch(batch_id)
@@ -199,6 +215,8 @@ def compute_summary_http(req: func.HttpRequest) -> func.HttpResponse:
 
         _check_not_truncated(canonical, classifications)
         summary = compute_summary(canonical, classifications)
+        if store_stats is not None:
+            summary["classification_store"] = store_stats
 
         # Same reason as batch_id: the summary is hundreds of rows, and the
         # caller cannot carry it to render_report. Asked to, a model trims it

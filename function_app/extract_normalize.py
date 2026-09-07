@@ -1478,6 +1478,78 @@ def store_batch(batch: dict[str, Any]) -> str:
     return batch_id
 
 
+CLASSIFICATION_SUFFIX = ".classifications.json"
+
+
+def _classification_key(row: dict[str, Any]) -> tuple[str, str]:
+    """What makes two classifications the same decision.
+
+    A transaction_id classification is about one row; a merchant one is about
+    every row of that merchant. They are different keys on purpose, so a
+    per-row correction can sit alongside the merchant rule it overrides.
+    """
+    txn_id = str(row.get("transaction_id") or "").strip()
+    if txn_id:
+        return ("txn", txn_id)
+    return ("merchant", str(row.get("merchant") or "").strip().upper())
+
+
+def merge_classifications(
+    batch_id: str, rows: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Accumulate a batch's classifications across calls.
+
+    A binder of 238 merchants cannot be reclassified in one pass, and asking
+    the agent to resend everything it already decided is what exhausted its
+    context window. The server keeps what it has been told; a repair pass
+    sends only the merchants it just worked out.
+
+    Last write wins, so a correction is a resend of that one entry. Order is
+    stable - previously stored entries keep their position, new ones append -
+    so the same calls always produce the same list.
+    """
+    batch_id = validate_batch_id(batch_id)
+    blob = f"{batch_id}{CLASSIFICATION_SUFFIX}"
+    from azure.core.exceptions import ResourceNotFoundError
+
+    try:
+        stored = json.loads(_batches_container().download_blob(blob).readall())
+    except ResourceNotFoundError:
+        stored = []
+    if not isinstance(stored, list):
+        stored = []
+
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in stored:
+        if isinstance(row, dict):
+            merged[_classification_key(row)] = row
+    known_before = len(merged)
+
+    added = replaced = 0
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        key = _classification_key(row)
+        if key == ("merchant", ""):
+            continue
+        if key in merged:
+            replaced += 1
+        else:
+            added += 1
+        merged[key] = row
+
+    out = list(merged.values())
+    payload = json.dumps(out, ensure_ascii=False).encode("utf-8")
+    _batches_container().upload_blob(name=blob, data=payload, overwrite=True)
+    return out, {
+        "known_before": known_before,
+        "sent_this_call": len([r for r in (rows or []) if isinstance(r, dict)]),
+        "added": added,
+        "replaced": replaced,
+        "total": len(out),
+    }
+
+
 def load_batch(batch_id: str) -> dict[str, Any]:
     """Read a stored canonical batch back.
 
