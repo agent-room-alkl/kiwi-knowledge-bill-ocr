@@ -76,10 +76,36 @@ Use `transaction_id` instead of `merchant` only when one row truly differs
 from the rest of that merchant. Never invent ids. Schema has
 `additionalProperties: false` and no amount field — do not restate amounts.
 
-**Classify inflows too.** Salary → `salary_wages`; WINZ/WFF → `benefit`;
-rent received → `rental_income`. Unclassified inflows become `unclear` and
-income disappears. Own-account moves → `internal_transfer`; card refunds →
-`reimbursement`.
+**Classify every worklist `transaction_id`.** Omitting an id is a join-miss
+(the engine then shows unclear with no model reason). Prefer `unclear` plus
+a reason over dropping the row. **C9** is this check.
+
+**Classify inflows too.** Salary / employer payroll → `salary_wages`;
+WINZ/WFF → `benefit`; rent received → `rental_income`. Own-account moves →
+`internal_transfer`; card refunds → `reimbursement`.
+
+**Side business vs salary.** Repeated small inflows from many personal
+names — especially bun / pork bun / egg / food-sale notes — are **gross
+side-business receipts**, not wages:
+- category `other_income` (never `salary_wages`)
+- `include_in_living_expenses` false
+- `is_business` yes
+- reason `side-business gross receipts, not net profit`
+Do not mark these `unclear` only because the counterparty is a person.
+Do not treat the sum as net profit or put it in recommended living.
+
+Person-name **outflows** in that food-trade pattern are business
+COGS/payouts: `is_business` yes, include false, not household grocery.
+
+Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering
+channel) → `is_business` yes, include false, `wholesale stock / COGS`.
+If bun/egg sales also appear, do not leave these as `review`.
+
+Workspace lease, advertising, trade payment-processor fees, and
+professional/trade software → `is_business` yes, include false.
+
+FX residue (`USD @ … conversion rate`) is not a purchase: `unclear` or
+`one_off`, include false, reason `foreign currency conversion line item`.
 
 `suggested_frequency` is a descriptor hint only (`WEEKLY` in the text, known
 monthly subscription). The engine measures date gaps and wins.

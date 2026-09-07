@@ -152,6 +152,11 @@ Hard classification rules:
 - Council rates -> `underwriter_manual`; do not auto-average into recommended living.
 - Credits are never living expenses.
 - A card payment is never salary or spend.
+- Classify every worklist `transaction_id`. Omitting an id is a join-miss, worse than `unclear` with a reason.
+- Repeated small inflows from many personal names (bun / egg / food-sale notes) → `other_income`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `salary_wages`. Never recommended living.
+- Wholesale / catering stock (trade wholesaler / Foodstuffs catering channel) → `is_business` yes, include false, COGS — not household grocery when bun/egg sales also appear.
+- Workspace lease, advertising, trade processor fees, professional software → `is_business` yes, include false.
+- FX `USD @ conversion rate` residue → `unclear` or `one_off`, include false, not a purchase.
 - `unclear` is required when confidence is below 0.60; include the reason in Part 5.
 
 `Include = Yes` only for recurring household living outflows that feed recommended living. It is `No` for income, transfers, debt repayments, interest, reimbursements, KiwiSaver/savings, donations, one-off items, and manual/unclear items.

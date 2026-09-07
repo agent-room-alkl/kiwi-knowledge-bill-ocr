@@ -50,6 +50,18 @@ Income labels (not living expenses): `salary_wages`, `benefit`, `child_support_r
 
 Other: `underwriter_manual` (council rates), `unclear` (confidence < 0.6).
 
+**Every worklist `transaction_id` must be classified.** Dropping an id is a join-miss (engine unclear with no model reason). Prefer `unclear` plus a reason over omitting the row.
+
+**Side business vs salary.** Repeated small inflows from many personal names — especially bun / pork bun / egg / food-sale notes — are **gross side-business receipts**, not wages: `other_income`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `salary_wages`. Never dump them as `unclear` only because the counterparty is a person. Do not treat the total as net profit or put it in recommended living.
+
+Person-name **outflows** in that same food-trade pattern are business COGS/payouts: `is_business` yes, include false, not household grocery.
+
+Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering channel) → `is_business` yes, include false, `business_reason` `wholesale stock / COGS`. If bun/egg sales also appear in the binder, do not leave these as `review`.
+
+Workspace lease (IWG/Regus-type), advertising (Google Ads-type), trade payment-processor fees (GoCardless-type), and professional/trade software → `is_business` yes, include false — not household subscriptions.
+
+FX residue (`USD @ … conversion rate`) is not a purchase: `unclear` or `one_off`, include false, reason `foreign currency conversion line item`.
+
 If `category` is `insurance`, set `insurance_type`. If `utilities`, set `utility_type`.
 
 `include_in_living_expenses` is true only for recurring living-expense categories excluding `one_off`.
