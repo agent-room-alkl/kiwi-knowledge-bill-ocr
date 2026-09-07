@@ -148,7 +148,20 @@ If `status` is `not_published`, report that; do not claim delivery.
 
 ## 2. Gate 2 — before render (from compute_summary JSON only)
 
-Any FAIL → do not render; report `SELFCHECK_FAILED` with the C-numbers.
+Any FAIL → do not render.
+
+**C8 and C9 are repairable, and repairing them is your job, not the
+reader's.** Both say what to do: classify what is missing and call
+`compute_summary` again with the fuller classification set. Do that yourself,
+up to **three** passes, before reporting anything. Each pass: take the
+merchants or inflows the failure names, classify them (`unclear` with a
+reason is a valid answer — a guess is not), and re-run `compute_summary`
+with **all** classifications, the earlier ones included. Stopping at the
+first C8/C9 and handing the list back is a refusal to finish the work.
+
+Report `SELFCHECK_FAILED` with the C-numbers when a check is not repairable,
+or when three repair passes have not cleared C8/C9 — then say what you tried
+and what is still unresolved.
 
 - C1 `part2` empty, or length ≠ non-info canonical transactions
 - C2 every Part 1 `monthly_equivalent` is 0, or recommended living is 0

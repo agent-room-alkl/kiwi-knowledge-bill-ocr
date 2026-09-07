@@ -65,6 +65,21 @@ def test_c9_reads_join_misses_not_the_length_of_the_classifications_array():
         assert "one merchant entry covers every row" in text, name
 
 
+def test_repairable_selfchecks_tell_the_agent_to_retry_before_reporting():
+    """C8/C9 name their own fix, so the agent must apply it, not forward it.
+
+    Both checks come with a remedy - classify what is missing and recompute.
+    An agent that reports SELFCHECK_FAILED on the first C9 hands the user a
+    list of merchants and no workbook, which is the failure this project
+    keeps hitting.
+    """
+    for name in ("PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt", "prompt-foundry-v2.md"):
+        text = (ROOT / "foundry" / name).read_text(encoding="utf-8")
+        assert "C8 and C9 are repairable" in text, name
+        assert "three" in text.split("C8 and C9 are repairable")[1][:600], name
+        assert "the earlier ones included" in text, name
+
+
 if __name__ == "__main__":
     test_side_business_receipts_are_not_salary_or_living()
     print("ok test_side_business_receipts_are_not_salary_or_living")
@@ -74,4 +89,6 @@ if __name__ == "__main__":
     print("ok test_selfcheck_ignores_side_business_turnover_when_judging_empty_income")
     test_c9_reads_join_misses_not_the_length_of_the_classifications_array()
     print("ok test_c9_reads_join_misses_not_the_length_of_the_classifications_array")
+    test_repairable_selfchecks_tell_the_agent_to_retry_before_reporting()
+    print("ok test_repairable_selfchecks_tell_the_agent_to_retry_before_reporting")
     print("ALL PASS")
