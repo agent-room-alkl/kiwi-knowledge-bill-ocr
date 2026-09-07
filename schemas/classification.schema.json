@@ -51,6 +51,7 @@
         "rental_income",
         "investment_income",
         "other_income",
+        "business_receipts",
         "underwriter_manual",
         "unclear"
       ]
@@ -99,7 +100,8 @@
         "child_support_received",
         "rental_income",
         "investment_income",
-        "other_income"
+        "other_income",
+        "business_receipts"
       ]
     },
     "classification": {

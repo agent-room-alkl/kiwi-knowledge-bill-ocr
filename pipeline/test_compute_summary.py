@@ -1127,6 +1127,43 @@ def test_audit_counts_join_misses_not_classification_objects():
     assert len(cls) != len(txns)
 
 
+def test_business_receipts_are_their_own_category_not_unclear():
+    """A row we identified must not be filed under "we could not tell".
+
+    Calling side-business takings `unclear` put 150 identified rows in the
+    same bucket as genuinely unknown ones, so the file read as though nobody
+    had classified them. They get their own category: outside income, because
+    a statement cannot evidence profit, and outside living expenses, because
+    they are money coming in.
+    """
+
+    txns, cls = [], []
+    for i in range(14):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "business_receipts", False, "irregular",
+                        reason="side-business gross receipts, not net profit",
+                        is_business="yes"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+
+    rows = [r for r in out["part2"] if r["category"] == "business_receipts"]
+    assert len(rows) == 14, [r["category"] for r in out["part2"]]
+    assert all(r["include"] == "No" for r in rows)
+    assert all("not net profit" in (r["exclusion_reason"] or "") for r in rows), rows[0]
+    assert not [r for r in out["part2"] if r["category"] == "unclear"]
+
+    # Outside income, outside living, still surfaced.
+    assert out["audit"]["assessable_income_monthly"] == 0
+    assert out["audit"]["side_business_gross_monthly"] > 0
+    assert out["audit"]["rent_monthly"] == 2400
+    assert out["recommended_monthly_living"] == 2400
+    assert any(
+        g["topic"] == "Unassessed receipts - possible trading income"
+        for g in out["part5"]["evidence_gaps"]
+    )
+    side = [r for r in out["income"] if r["type"] == "side_business_gross_not_assessable"]
+    assert len(side) == 1 and side[0]["amount_observed"] == 1400
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1164,6 +1201,7 @@ if __name__ == "__main__":
         test_trading_turnover_gets_its_own_income_line_outside_assessable_income,
         test_no_side_business_line_when_there_is_no_trading_shape,
         test_audit_counts_join_misses_not_classification_objects,
+        test_business_receipts_are_their_own_category_not_unclear,
     ]
     for fn in tests:
         fn()

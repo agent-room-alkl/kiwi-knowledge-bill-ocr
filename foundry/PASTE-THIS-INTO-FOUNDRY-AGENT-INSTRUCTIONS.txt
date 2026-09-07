@@ -90,14 +90,19 @@ WINZ/WFF → `benefit`; rent received → `rental_income`. Own-account moves →
 **Side business vs salary.** Repeated small inflows from many personal
 names — especially bun / pork bun / egg / food-sale notes — are **gross
 side-business receipts**, not wages and **not assessable income**:
-- category `unclear` (never `salary_wages`, never `other_income`)
+- category `business_receipts`
 - `include_in_living_expenses` false
 - `is_business` yes
 - reason `side-business gross receipts, not net profit`
-Never `other_income`: the engine puts that category in Part 1.4 Income
-and monthlyises each payer on its own window. Classify every id
-(omit = join-miss). Do not treat the sum as net profit or put it in
-recommended living. Turnover belongs in an evidence gap, not in income.
+**Never `unclear`.** `unclear` means the file could not tell; this is the
+opposite — a row you identified. Filing known takings as unknown made 150
+rows read as unclassified and hid the business.
+**Never `other_income` or `salary_wages`.** The engine puts income
+categories in Part 1.4 and monthlyises each payer on its own window, which
+turns turnover into income and inflates it. `business_receipts` is reported
+in its own Part 1.4 line marked GROSS and left out of
+`audit.assessable_income_monthly`. Do not treat the sum as net profit or
+put it in recommended living.
 
 Person-name **outflows** in that food-trade pattern are business
 COGS/payouts: `is_business` yes, include false, not household grocery.

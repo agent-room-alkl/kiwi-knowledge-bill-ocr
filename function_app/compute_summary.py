@@ -40,8 +40,17 @@ INCOME = frozenset(
         "income_credit",
     }
 )
+# Trading receipts from a side business. Deliberately not in INCOME: a bank
+# statement evidences money arriving, not profit, and servicing runs on
+# profit. Deliberately not `unclear` either - "unclear" means the file could
+# not tell, and this is the opposite, a row we identified. Calling a known
+# thing unknown is what made an applicant's bun-and-egg takings read as 150
+# unclassified rows.
+BUSINESS_RECEIPTS = "business_receipts"
+
 EXCLUSIONS = frozenset(
     {
+        BUSINESS_RECEIPTS,
         "internal_transfer",
         "credit_card_repayment",
         "loan_repayment",
@@ -724,7 +733,7 @@ def evidence_gaps(
     credits = [
         r for r in rows
         if r.get("direction") == "inflow"
-        and r.get("category") in {"unclear", "underwriter_manual"}
+        and r.get("category") in {BUSINESS_RECEIPTS, "unclear", "underwriter_manual"}
         and 0 < abs(float(r.get("amount") or 0)) <= SIDE_INCOME_MAX_TICKET
     ]
     payers = {str(r.get("merchant_normalized") or r.get("description") or "").strip().upper()
@@ -1100,7 +1109,15 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 line_include = False
             exclusion = ""
             if not line_include:
-                if business:
+                # Trading receipts are checked before the is_business branch:
+                # they are flagged is_business too, and "business /
+                # non-household" would describe them as spending.
+                if category == BUSINESS_RECEIPTS:
+                    exclusion = (
+                        r.get("reason")
+                        or "side-business gross receipts, not net profit"
+                    )
+                elif business:
                     why = r.get("business_reason") or "business / non-household"
                     exclusion = why if why.startswith("business") else f"business / non-household: {why}"
                 elif category in INCOME:
@@ -1253,7 +1270,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         credits = [
             r for r in joined
             if r.get("direction") == "inflow"
-            and r.get("category") in {"unclear", "underwriter_manual"}
+            and r.get("category") in {BUSINESS_RECEIPTS, "unclear", "underwriter_manual"}
             and 0 < abs(float(r.get("amount") or 0)) <= SIDE_INCOME_MAX_TICKET
         ]
         total = sum(abs(float(r.get("amount") or 0)) for r in credits)
