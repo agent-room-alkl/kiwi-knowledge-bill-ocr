@@ -655,12 +655,22 @@ def evidence_gaps(
         except (ValueError, TypeError):
             asof = None
         if asof:
+            def _within_window(row: dict[str, Any]) -> bool:
+                # A gap check is a reporting aid. It must never be the thing
+                # that fails an assessment, so one unreadable date drops that
+                # row from this check rather than raising.
+                try:
+                    days = (asof - parse_date(row.get("date"))).days
+                except (ValueError, TypeError):
+                    return False
+                return 0 <= days <= REMITTANCE_WINDOW_DAYS
+
             recent = [
                 r for r in rows
                 if r.get("direction") == "outflow"
                 and abs(float(r.get("amount") or 0)) >= REMITTANCE_MIN_AMOUNT
                 and re.search(_REMITTER, _row_blob(r))
-                and 0 <= (asof - parse_date(r["date"])).days <= REMITTANCE_WINDOW_DAYS
+                and _within_window(r)
             ]
             if recent:
                 total = sum(abs(float(r.get("amount") or 0)) for r in recent)
@@ -1165,6 +1175,16 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         {"topic": "Liabilities", "note": f"{len(part4)} evidenced facilities; status: {liability_status}.", "requires_signoff": bool(part4)},
         {"topic": "Discretionary spend", "note": f"Recreation and entertainment monthly equivalent: {discretionary:.2f}.", "requires_signoff": discretionary > 0},
         {"topic": "Unclear/manual", "note": f"{unclear_manual} transactions require manual review or remain unclear.", "requires_signoff": unclear_manual > 0},
+        {
+            "topic": "Evidence gaps",
+            "note": (
+                f"{len(gaps)} evidence gap(s) detected - see the Evidence gaps block: "
+                + "; ".join(g["topic"] for g in gaps)
+                if gaps
+                else "No evidence gaps detected by the automated checks."
+            ),
+            "requires_signoff": bool(gaps),
+        },
     ]
     join_miss = sum(
         1 for r in joined
