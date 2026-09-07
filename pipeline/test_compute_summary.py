@@ -365,14 +365,22 @@ def test_mixed_amounts_use_dominant_cluster_not_median():
     rent = out["audit"]["rent_monthly"]
     assert abs(rent - 1800) > 1, f"mixed median leaked: {rent}"
     assert abs(rent - 4116) > 50, f"extras monthlyised into run-rate: {rent}"
-    # 4 × $2,880 over 92 days (3.02 months) → ~$3,814, not a flat $2,880.
-    assert 3800 <= rent <= 3830, f"expected 2880×4/3.02 ≈ 3814, got {rent}"
+    # The repeating charge is the rent. Four postings in 3.02 months could be a
+    # fortnightly tenancy, an arrears catch-up or a second property, and those
+    # do not service the same way - so the cadence becomes a question on Part 5
+    # rather than a $3,811 nobody can source.
+    assert rent == 2880, f"rent must stay the repeating amount, got {rent}"
     cadence_notes = [
         n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Rent cadence"
     ]
     assert cadence_notes, "irregular rent cadence must land a Part5 note"
-    assert "3811" in cadence_notes[0]["note"] or "3814" in cadence_notes[0]["note"]
-    assert "extras" in cadence_notes[0]["note"].lower() or "not monthlyised" in cadence_notes[0]["note"].lower()
+    note = cadence_notes[0]
+    assert note["requires_signoff"] is True
+    assert "4 times in 3.02 months" in note["note"], note["note"]
+    assert "3811" in note["note"], "the cadence reading must be shown, not hidden"
+    assert "4115" in note["note"] or "4116" in note["note"], "the run-rate must be shown too"
+    assert "2880" in note["note"], "the reported figure must be named"
+    assert "Confirm the contracted rent" in note["note"], note["note"]
 
 
 def test_same_day_salary_rows_merge_before_typical():

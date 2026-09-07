@@ -870,14 +870,22 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 / stream_months
             )
             # Repeating rent of $2,880 plus catch-up/fees must not average to
-            # $4,116. If the same charge posted at least twice, start from
-            # that amount so extras stay visible on Part 2 — but multiply by
-            # how often it actually posted in the window. Four $2,880 charges
-            # in 3.02 months are not one month of rent.
+            # $4,116: the repeating amount is the rent, and the extras stay
+            # visible on Part 2 rather than being monthlyised.
+            #
+            # When that amount posts more often than the window has months,
+            # the engine still reports $2,880. Four postings in 3.02 months
+            # can be a tenancy that bills fortnightly, a catch-up after
+            # arrears, or a second property - and those have different
+            # servicing consequences that no amount of arithmetic can tell
+            # apart. Guessing 4/3.02 and writing $3,811 would put a number
+            # nobody can source into recommended living. So the cadence is
+            # reported as a question for the underwriter, with the figure the
+            # cadence reading would give, and the money does not move.
             rent_cluster_n = dominant_cluster_size([r["amount"] for r in rows])
             if category == "rent_board_paid" and rent_cluster_n >= 2:
-                cadence = max(rent_cluster_n / stream_months, 1.0)
-                monthly = typical * cadence
+                monthly = monthly_equivalent(typical, "monthly")
+                cadence = rent_cluster_n / stream_months
                 if cadence > 1.0:
                     rent_cadence_notes.append(
                         {
@@ -885,11 +893,13 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                             "note": (
                                 f"{merchant}: repeating ${typical:.2f} posted "
                                 f"{rent_cluster_n} times in {stream_months:.2f} months "
-                                f"(not a clean monthly cycle). Monthly figure is "
-                                f"typical × max(n/months, 1) = ${monthly:.2f}. "
-                                f"Extra/catch-up amounts stay on Part 2 and are "
-                                f"not monthlyised. Do not use the all-in run-rate "
-                                f"(${run_rate:.2f})."
+                                f"(not a clean monthly cycle). Reported monthly rent is "
+                                f"the repeating amount, ${monthly:.2f}. Read as a cadence "
+                                f"instead it would be ${typical * cadence:.2f}/month, and "
+                                f"the all-in run-rate is ${run_rate:.2f} - the engine uses "
+                                f"neither. Confirm the contracted rent and what the extra "
+                                f"postings are (fortnightly tenancy, arrears catch-up, or "
+                                f"a second property) before relying on this line."
                             ),
                             "requires_signoff": True,
                         }
@@ -909,8 +919,9 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         calculation_basis = (
             (
                 (
-                    f"dominant repeating amount × {rent_cluster_n}/{stream_months:.2f} "
-                    f"months; extras not monthlyised"
+                    f"dominant repeating amount; extras not monthlyised "
+                    f"({rent_cluster_n} postings in {stream_months:.2f} months "
+                    f"- see the Rent cadence note)"
                     if rent_cluster_n / stream_months > 1.0
                     else "dominant repeating amount; extras not monthlyised"
                 )
