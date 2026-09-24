@@ -1,0 +1,82 @@
+# ===========================
+# Kiwi Knowledge Bill OCR - Terraform Variables
+# ===========================
+# Copy this file to terraform.tfvars and customize for your environment
+# NEVER commit terraform.tfvars with real values to source control
+
+# ===========================
+# Project Configuration
+# ===========================
+
+project_name   = "kiwi-ocr"
+unique_suffix  = ""  # Leave empty to generate random suffix, or provide 4-8 char string
+environment    = "dev"
+location       = "australiaeast"  # australiaeast, eastus2, westeurope, etc.
+
+# ===========================
+# Resource Group
+# ===========================
+
+# Set to true to use an existing resource group instead of creating new
+use_existing_resource_group = false
+# resource_group_name = "existing-rg-name"  # Required if use_existing_resource_group = true
+
+# ===========================
+# Storage Account
+# ===========================
+
+storage_account_tier     = "Standard"  # Standard or Premium
+storage_replication_type = "LRS"       # LRS, GRS, RAGRS, ZRS, GZRS, RAGZRS
+storage_containers       = ["samples", "batches", "reports"]
+
+# Optional: Override container names used by Function App
+# samples_container_override = "custom-samples"
+# batches_container_override = "custom-batches"
+# reports_container_override = "custom-reports"
+
+# ===========================
+# Document Intelligence
+# ===========================
+
+document_intelligence_sku = "S0"  # F0 (free tier) or S0 (standard)
+
+# ===========================
+# App Service Plan & Function App
+# ===========================
+
+app_service_plan_sku = "B1"  # B1, B2, B3, S1-S3, P1v2-P3v3 (Linux plans)
+
+# Use managed identity for Document Intelligence access (recommended for production)
+use_managed_identity = false  # Set to true to use managed identity instead of API keys
+
+# Enable binder lookup feature
+binder_lookup_enabled = true
+
+# ===========================
+# Azure AI Foundry (Preview)
+# ===========================
+
+# WARNING: AI Foundry Hub/Project creation is in preview
+# Agent and OpenAPI tool attachments cannot be automated via Terraform
+# and must be configured manually in the Azure AI Portal
+
+create_ai_foundry_resources = false  # Set to true to create Hub/Project
+
+# Required if create_ai_foundry_resources = true
+# key_vault_id = "/subscriptions/xxx/resourceGroups/xxx/providers/Microsoft.KeyVault/vaults/xxx"
+
+# Model deployment (only if create_ai_foundry_resources = true)
+foundry_model_name       = ""       # e.g., "gpt-4", "gpt-35-turbo" - leave empty to skip
+foundry_model_version    = "0613"
+foundry_deployment_name  = "gpt-4"  # Should match model name for consistency
+foundry_model_capacity   = 10       # TPM in thousands
+
+# ===========================
+# Tags
+# ===========================
+
+tags = {
+  Owner       = "platform-team"
+  CostCenter  = "engineering"
+  Application = "kiwi-knowledge-bill-ocr"
+}
