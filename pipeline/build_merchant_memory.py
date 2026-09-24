@@ -12,14 +12,23 @@ container.
 
 Only rows the model actually classified are learned, and never `unclear`.
 A merchant that was put in two different categories within the run is left
-out rather than guessed. See compute_summary.memory_classification for how
-the result is applied and why most entries are pinned to their source files.
+out rather than guessed.
+
+Only explicitly approved exceptional brand knowledge is written out - see
+`_is_approved_exception`. Nothing about the applicant is kept: no payer
+names, no statement filenames. Ordinary merchants are deliberately left to
+the agent; accepting a run must not silently turn every shop in that one
+applicant's statement into product configuration. Who paid the applicant is
+recognised at classification time from the shape of the name, by
+compute_summary.payer_classification, so it works on a binder this file has
+never seen.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -34,7 +43,12 @@ from compute_summary import (  # noqa: E402
     UTILITY_TYPES,
     merchant_join_key,
 )
-from extract_normalize import normalize_merchant  # noqa: E402
+from extract_normalize import (  # noqa: E402
+    _CARD_PAN_RE,
+    _ORIG_DATE_RE,
+    looks_like_payer_name,
+    normalize_merchant,
+)
 
 # subtype_breakdowns labels written by the engine before the enums settled.
 _LEGACY_SUBTYPES = {
@@ -55,11 +69,55 @@ def _single_subtype(summary: dict, block: str, allowed: frozenset) -> str | None
     return None
 
 
-def _is_global(direction: str, category: str, is_business: str) -> bool:
+def _public_descriptor(description: str) -> str:
+    """A descriptor with the cardholder's own details taken out.
+
+    Descriptors are stored raw so the loader can re-key them under whatever
+    the normaliser does on the day it runs. Raw turned out to include the
+    card the applicant paid with - 28 of them read like `ACE99 BAKERY
+    483561 ****** 7996 Orig date 01/08/2026`, and a BIN with the last four
+    digits belongs to one person, not to the bakery. normalize_merchant
+    strips both of these before keying anyway, so nothing is lost by
+    removing them here as well.
+    """
+    text = _CARD_PAN_RE.sub(" ", description)
+    text = re.sub(_ORIG_DATE_RE.pattern, "", text, flags=re.I)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _is_approved_exception(
+    key: str,
+    direction: str,
+    category: str,
+    is_business: str,
+    approved_keys: frozenset[str],
+) -> bool:
+    """True for merchant knowledge explicitly approved as a product exception.
+
+    Memory used to keep everything the accepted run classified, pinning the
+    applicant-specific part to the statement files it came from. That made
+    it a file about one applicant: 94 of its 234 entries were keyed by the
+    names of people who had paid them, and the pinned filenames carried the
+    account number. It also did not generalise - the next applicant has
+    different payers, so none of those entries could ever match again.
+
+    Public is necessary but not sufficient. Common brands such as DIDI and
+    supermarkets are the agent's job; learning them merely because they
+    appeared in one accepted run overfits the product to that sample. A key
+    must therefore be named explicitly by an underwriter/product owner as a
+    genuinely exceptional merchant before it is emitted. What is left needs
+    no pinning, which is why no entry carries source_files any more.
+
+    is_business is excluded because it is a judgement about one applicant,
+    not about the merchant: the same Anthropic subscription is a business
+    expense for one and a personal one for the next.
+    """
     return (
         direction == "outflow"
         and category in GLOBAL_MEMORY_CATEGORIES
         and is_business != "yes"
+        and not looks_like_payer_name(key)
+        and key.upper() in approved_keys
     )
 
 
@@ -74,7 +132,15 @@ def _schema_categories() -> frozenset:
     return frozenset(schema["$defs"]["category"]["enum"])
 
 
-def build(canonical: dict, summary: dict, label: str) -> dict:
+def build(
+    canonical: dict,
+    summary: dict,
+    label: str,
+    approved_keys: set[str] | frozenset[str] | None = None,
+) -> dict:
+    approved = frozenset(
+        str(key).upper().strip() for key in (approved_keys or ()) if str(key).strip()
+    )
     allowed = _schema_categories()
     txns = {t["transaction_id"]: t for t in canonical.get("transactions") or []}
     utility_type = _single_subtype(summary, "utilities", UTILITY_TYPES)
@@ -95,7 +161,7 @@ def build(canonical: dict, summary: dict, label: str) -> dict:
         if key:
             groups[(key, txn["direction"])].append((row, txn))
 
-    entries, conflicts, retired = [], [], []
+    entries, conflicts, retired, private = [], [], [], []
     for (key, direction), members in sorted(groups.items()):
         decisions = {
             (r["category"], str(r.get("is_business") or "no").lower()) for r, _ in members
@@ -106,6 +172,9 @@ def build(canonical: dict, summary: dict, label: str) -> dict:
         (category, is_business) = next(iter(decisions))
         if category not in allowed:
             retired.append({"key": key, "direction": direction, "category": category})
+            continue
+        if not _is_approved_exception(key, direction, category, is_business, approved):
+            private.append({"key": key, "direction": direction, "category": category})
             continue
         first = members[0][0]
         entry = {
@@ -118,7 +187,9 @@ def build(canonical: dict, summary: dict, label: str) -> dict:
             "rows_seen": len(members),
             # Raw descriptors, so the loader can re-key them with whatever
             # the normaliser does on the day it runs.
-            "descriptors": sorted({str(t.get("description") or "") for _, t in members} - {""}),
+            "descriptors": sorted(
+                {_public_descriptor(str(t.get("description") or "")) for _, t in members} - {""}
+            ),
         }
         if category == "utilities" and utility_type:
             entry["utility_type"] = utility_type
@@ -126,10 +197,6 @@ def build(canonical: dict, summary: dict, label: str) -> dict:
             entry["insurance_type"] = insurance_type
         if category in INCOME_TYPES:
             entry["income_type"] = category
-        if not _is_global(direction, category, is_business):
-            entry["source_files"] = sorted(
-                {str(t.get("source_file") or "") for _, t in members} - {""}
-            )
         entries.append(entry)
 
     return {
@@ -140,8 +207,12 @@ def build(canonical: dict, summary: dict, label: str) -> dict:
             "part2_rows": len(summary.get("part2") or []),
         },
         "entries": entries,
-        "conflicts_skipped": conflicts,
-        "retired_categories_skipped": retired,
+        # Skipped candidates are counts, not lists: listing them would put
+        # sample-derived merchant/payer text back into the reviewed config.
+        "conflicts_skipped_count": len(conflicts),
+        "retired_categories_skipped_count": len(retired),
+        "unapproved_or_applicant_specific_skipped": len(private),
+        "approved_exception_keys": sorted(approved),
     }
 
 
@@ -151,19 +222,28 @@ def main() -> int:
     ap.add_argument("summary")
     ap.add_argument("--out", default=str(ROOT / "function_app" / "merchant_memory.json"))
     ap.add_argument("--label", default="accepted run")
+    ap.add_argument(
+        "--approved-key",
+        action="append",
+        default=[],
+        help=(
+            "merchant join key explicitly approved as an exceptional product rule; "
+            "repeat for more than one. With none, rebuilt memory is intentionally empty"
+        ),
+    )
     args = ap.parse_args()
     canonical = json.loads(Path(args.canonical).read_text(encoding="utf-8"))
     summary = json.loads(Path(args.summary).read_text(encoding="utf-8"))
-    memory = build(canonical, summary, args.label)
+    memory = build(canonical, summary, args.label, set(args.approved_key))
     Path(args.out).write_text(
         json.dumps(memory, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
-    n_global = sum(1 for e in memory["entries"] if "source_files" not in e)
     print(
-        f"{len(memory['entries'])} merchants remembered "
-        f"({n_global} global, {len(memory['entries']) - n_global} pinned to their files); "
-        f"{len(memory['conflicts_skipped'])} skipped as conflicting, "
-        f"{len(memory['retired_categories_skipped'])} skipped for a retired category -> {args.out}"
+        f"{len(memory['entries'])} approved merchant exceptions remembered; "
+        f"{memory['unapproved_or_applicant_specific_skipped']} skipped as "
+        "unapproved/applicant-specific, "
+        f"{memory['conflicts_skipped_count']} skipped as conflicting, "
+        f"{memory['retired_categories_skipped_count']} skipped for a retired category -> {args.out}"
     )
     return 0
 

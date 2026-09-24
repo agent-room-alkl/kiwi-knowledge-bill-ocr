@@ -11,6 +11,7 @@ cannot switch the memory off.
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 import tempfile
@@ -91,6 +92,17 @@ PAYER = {
     "income_type": "business_receipts", "descriptors": ["ZHAO,LILI Bun Lili"],
     "source_files": [FILE_A],
 }
+# Whether a subscription is a business expense is a judgement about one
+# applicant, not about Anthropic, so an entry like this is still pinned to
+# the files it was learned from. It is also not a person's name, which is
+# what makes it the right fixture for testing the pin: payer_classification
+# cannot answer it, so a leak would have nowhere else to come from.
+PINNED_BRAND = {
+    "direction": "outflow", "category": "monthly_subscriptions",
+    "include_in_living_expenses": False, "is_business": "yes",
+    "reason": "business tooling", "descriptors": ["ANTHROPIC ANTHROPIC.COMCA"],
+    "source_files": [FILE_A],
+}
 
 
 def _run(txns, classifications=(), **extra):
@@ -127,14 +139,64 @@ def test_the_model_always_wins_over_memory():
 
 
 def test_applicant_specific_entries_never_cross_binders():
-    """A side-business payer is a fact about one applicant, not the name."""
-    with _Memory([PAYER]):
-        same = _run([_txn("t1", "ZHAO,LILI Bun Lili", 40.0, "inflow", FILE_A)])
-        other = _run([_txn("t1", "ZHAO,LILI Bun Lili", 40.0, "inflow", FILE_B)])
-    assert _row(same, "t1")["category"] == "business_receipts"
+    """A pinned judgement is a fact about one applicant, not the merchant."""
+    with _Memory([PINNED_BRAND]):
+        same = _run([_txn("t1", "ANTHROPIC ANTHROPIC.COMCA", 40.0, "outflow", FILE_A)])
+        other = _run([_txn("t1", "ANTHROPIC ANTHROPIC.COMCA", 40.0, "outflow", FILE_B)])
+    assert _row(same, "t1")["category"] == "monthly_subscriptions", _row(same, "t1")
     assert _row(other, "t1")["category"] == "unclear", _row(other, "t1")
     assert other["audit"]["memory_filled_rows"] == 0
     print("ok test_applicant_specific_entries_never_cross_binders")
+
+
+def test_a_payer_name_is_answered_on_a_binder_memory_never_saw():
+    """The whole point of the rule: it does not need to have met the payer.
+
+    The memory file used to carry 94 of this applicant's payers by name. That
+    could never help the next applicant, whose payers are different people,
+    so the names came out and this rule went in. Memory is empty here on
+    purpose - nothing is remembered about ZHAO,LILI at all.
+    """
+    with _Memory([DIDI]):
+        s = _run([_txn("t1", "ZHAO,LILI Bun Lili", 40.0, "inflow", FILE_B)])
+    row = _row(s, "t1")
+    assert row["category"] == "business_receipts", row
+    assert row["is_business"] == "yes", row
+    assert row["reason"].startswith("payer name:"), row["reason"]
+    assert s["audit"]["memory_filled_rows"] == 0, s["audit"]
+    assert s["audit"]["payer_name_filled_rows"] == 1, s["audit"]
+    print("ok test_a_payer_name_is_answered_on_a_binder_memory_never_saw")
+
+
+def test_the_same_name_leaving_is_not_revenue():
+    """An outflow to a person is the applicant paying somebody."""
+    with _Memory([DIDI]):
+        s = _run([_txn("t1", "ZHAO,LILI Bun Lili", 40.0, "outflow", FILE_B)])
+    row = _row(s, "t1")
+    assert row["category"] == "unclear", row
+    print("ok test_the_same_name_leaving_is_not_revenue")
+
+
+def test_shipped_memory_file_carries_nothing_about_an_applicant():
+    """The reviewed exception file must carry no applicant information."""
+    from extract_normalize import looks_like_payer_name
+
+    raw = json.load(open(os.path.join(ROOT, "function_app", "merchant_memory.json"), encoding="utf-8"))
+    entries = raw["entries"]
+    named = [e["key"] for e in entries if looks_like_payer_name(e["key"])]
+    assert not named, named
+    described = [d for e in entries for d in e.get("descriptors", []) if looks_like_payer_name(d)]
+    assert not described, described
+    assert not [e for e in entries if e.get("source_files")], "source_files leak statement filenames"
+    assert not [e for e in entries if e["direction"] == "inflow"], "inflows are the applicant's income"
+    assert not [e for e in entries if e["category"] == "business_receipts"]
+    blob = json.dumps(raw, ensure_ascii=False)
+    for pattern in (r"\d{4,6}\s*\*{2,}\s*\d{2,4}", r"\b\d{2}-\d{4}-\d{7}", r"\.pdf"):
+        assert not re.search(pattern, blob, re.I), pattern
+    print(
+        "ok test_shipped_memory_file_carries_nothing_about_an_applicant "
+        f"({len(entries)} approved exceptions)"
+    )
 
 
 def test_a_household_shop_travels_to_any_binder():
@@ -206,13 +268,21 @@ def test_builder_learns_only_what_is_safe_to_replay():
         {"transaction_id": "t5", "classified": True, "category": "food_grocery_clothing_personal_care", "include": True, "is_business": "no", "reason": "grocer"},
         {"transaction_id": "t6", "classified": True, "category": "recreation_entertainment", "include": True, "is_business": "no", "reason": "cafe"},
     ]
-    memory = build(canonical, {"part2": part2}, "test")
+    unapproved = build(canonical, {"part2": part2}, "test")
+    assert unapproved["entries"] == [], unapproved["entries"]
+
+    memory = build(canonical, {"part2": part2}, "test", {"DIDI_NZ"})
     by_cat = {e["category"]: e for e in memory["entries"]}
-    assert set(by_cat) == {"transport", "business_receipts"}, set(by_cat)
+    # The payer is no longer learned at all. It used to be written out
+    # pinned to FILE_A, which made the file a record of who paid this
+    # applicant and helped no other binder; the rule answers it instead.
+    assert set(by_cat) == {"transport"}, set(by_cat)
     assert "source_files" not in by_cat["transport"], "a shop should travel"
-    assert by_cat["business_receipts"]["source_files"] == [FILE_A], "a payer must not"
-    assert [c["category"] for c in memory["retired_categories_skipped"]] == ["education_childcare"]
-    assert len(memory["conflicts_skipped"]) == 1  # FU MARKET, two categories
+    assert not [e for e in memory["entries"] if e.get("source_files")], memory["entries"]
+    assert memory["unapproved_or_applicant_specific_skipped"] == 1
+    assert memory["approved_exception_keys"] == ["DIDI_NZ"]
+    assert memory["retired_categories_skipped_count"] == 1
+    assert memory["conflicts_skipped_count"] == 1  # FU MARKET, two categories
     print("ok test_builder_learns_only_what_is_safe_to_replay")
 
 
@@ -221,7 +291,8 @@ def test_shipped_memory_file_loads_and_only_uses_live_categories():
     memory = cs.load_merchant_memory()
     schema = json.load(open(os.path.join(ROOT, "schemas", "classification.schema.json"), encoding="utf-8"))
     allowed = set(schema["$defs"]["category"]["enum"]) - {"unclear"}
-    assert memory, "function_app/merchant_memory.json missing or empty"
+    # No merchant has yet been approved as a genuinely exceptional product
+    # rule. Empty is safer than silently learning one applicant's shops.
     bad = {e["category"] for e in memory.values()} - allowed
     assert not bad, bad
     print(f"ok test_shipped_memory_file_loads_and_only_uses_live_categories ({len(memory)} keys)")
@@ -231,6 +302,9 @@ if __name__ == "__main__":
     test_memory_fills_what_the_model_skipped()
     test_the_model_always_wins_over_memory()
     test_applicant_specific_entries_never_cross_binders()
+    test_a_payer_name_is_answered_on_a_binder_memory_never_saw()
+    test_the_same_name_leaving_is_not_revenue()
+    test_shipped_memory_file_carries_nothing_about_an_applicant()
     test_a_household_shop_travels_to_any_binder()
     test_direction_is_part_of_the_key()
     test_descriptors_are_rekeyed_with_todays_normaliser()

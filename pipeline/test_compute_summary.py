@@ -1234,8 +1234,17 @@ def test_different_people_are_not_merged_by_the_join_key():
     out = compute_summary(*_rent_only_binder(txns, cls))
     by_desc = {r["description"]: r for r in out["part2"]}
     assert by_desc["ZHANG,MENG Menglich"]["category"] == "business_receipts"
-    assert by_desc["ZHANG,FAN BILL PAYMENT"]["category"] == "unclear"
-    assert by_desc["ZHANG,FAN BILL PAYMENT"]["exclusion_reason"] == "no classification joined"
+    # Both land on business_receipts now, so category can no longer show
+    # whether the join leaked. The reason can: MENG carries what the model
+    # said, FAN carries what payer_classification said. A leak would put
+    # the model's own wording on a row the model never classified.
+    assert by_desc["ZHANG,MENG Menglich"]["reason"] == (
+        "side-business gross receipts, not net profit"
+    )
+    fan = by_desc["ZHANG,FAN BILL PAYMENT"]
+    assert fan["category"] == "business_receipts", fan
+    assert fan["reason"].startswith("payer name:"), fan
+    assert fan["reason"] != by_desc["ZHANG,MENG Menglich"]["reason"], fan
 
 
 def test_the_wider_join_key_moves_no_money():
@@ -1256,7 +1265,15 @@ def test_the_wider_join_key_moves_no_money():
     out = compute_summary(*_rent_only_binder(txns, cls))
     assert out["audit"]["rent_monthly"] == control["audit"]["rent_monthly"] == 2400
     assert out["recommended_monthly_living"] == control["recommended_monthly_living"]
-    assert out["audit"]["join_miss_rows"] == 0 and control["audit"]["join_miss_rows"] == 2
+    # The control used to show 2 join misses. payer_classification answers
+    # a person-name inflow without the model, so both runs now join fully -
+    # which is the stronger form of the same claim: the wider key changed
+    # no total, and neither did the rule that made the misses go away.
+    assert out["audit"]["join_miss_rows"] == 0, out["audit"]["join_miss_rows"]
+    assert control["audit"]["join_miss_rows"] == 0, control["audit"]["join_miss_rows"]
+    assert {r["category"] for r in control["part2"] if r["direction"] == "inflow"} == {
+        "business_receipts"
+    }
 
 
 def test_info_rows_are_not_counted_as_unclassified():

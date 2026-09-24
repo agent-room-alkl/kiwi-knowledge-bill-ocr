@@ -1,0 +1,13 @@
+{
+ "version": 1,
+ "seeded_from": {
+  "label": "2026-09-17 accepted run; no exceptional merchants approved",
+  "assessment_date": "2026-09-17",
+  "part2_rows": 471
+ },
+ "entries": [],
+ "conflicts_skipped_count": 0,
+ "retired_categories_skipped_count": 4,
+ "unapproved_or_applicant_specific_skipped": 234,
+ "approved_exception_keys": []
+}

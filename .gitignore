@@ -21,12 +21,9 @@ fixtures/samples/
 *.png
 out/
 
-# Merchant memory is seeded from a real applicant's statement: 76 person-name
-# keys and 94 business_receipts entries with their original descriptors. This
-# repo is public, so the file ships to Azure via `func azure functionapp
-# publish` and is deliberately not committed. See specs/ for how to rebuild it
-# with pipeline/build_merchant_memory.py from an accepted run.
-function_app/merchant_memory.json
+# Merchant memory is a reviewed product configuration file. The builder emits
+# only explicitly approved exceptional keys and strips applicant-specific data,
+# so the safe result is committed and deployed from the same Git revision.
 
 # Material received from Vikas, not ours to publish in a public repo.
 from vikas/

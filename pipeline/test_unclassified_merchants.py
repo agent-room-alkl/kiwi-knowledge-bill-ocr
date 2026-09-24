@@ -125,7 +125,13 @@ def test_repeated_merchant_collapses_to_one_entry_with_a_row_count():
 
 
 def test_direction_is_carried_because_it_changes_the_answer():
-    """Same person's name: inflow is side-business takings, outflow is not."""
+    """Same person's name: inflow is side-business takings, outflow is not.
+
+    The inflow no longer reaches the worklist at all - payer_classification
+    answers it from the shape of the name - so what this pins now is that the
+    outflow is NOT answered the same way and is still asked about. Direction
+    deciding the answer is the point either way.
+    """
     summary = compute_summary(
         _canonical(
             [
@@ -135,10 +141,30 @@ def test_direction_is_carried_because_it_changes_the_answer():
         ),
         {"assessment_date": "2026-09-21", "classifications": []},
     )
+    by_id = {r["transaction_id"]: r for r in summary["part2"]}
+    assert by_id["t1"]["category"] == "business_receipts", by_id["t1"]
+    assert by_id["t2"]["category"] == "unclear", by_id["t2"]
     names = summary["audit"]["unclassified_merchants"]
     directions = {e["direction"] for e in names if "ZHANG" in e["merchant"].upper()}
-    assert directions == {"inflow", "outflow"}, directions
+    assert directions == {"outflow"}, directions
     print("ok test_direction_is_carried_because_it_changes_the_answer")
+
+
+def test_worklist_still_carries_both_directions_for_a_business():
+    """A merchant the payer rule does not touch is asked about either way."""
+    summary = compute_summary(
+        _canonical(
+            [
+                _txn("t1", "NYX*HOOP33 LIMITED Auckland", 2.80, "inflow"),
+                _txn("t2", "NYX*HOOP33 LIMITED Auckland", 2.80, "outflow"),
+            ]
+        ),
+        {"assessment_date": "2026-09-21", "classifications": []},
+    )
+    names = summary["audit"]["unclassified_merchants"]
+    directions = {e["direction"] for e in names if "HOOP33" in e["merchant"].upper()}
+    assert directions == {"inflow", "outflow"}, directions
+    print("ok test_worklist_still_carries_both_directions_for_a_business")
 
 
 def test_info_rows_are_not_asked_about():
@@ -203,6 +229,7 @@ if __name__ == "__main__":
     test_unclassified_rows_come_back_with_merchant_names()
     test_repeated_merchant_collapses_to_one_entry_with_a_row_count()
     test_direction_is_carried_because_it_changes_the_answer()
+    test_worklist_still_carries_both_directions_for_a_business()
     test_info_rows_are_not_asked_about()
     test_list_is_capped_and_says_so_while_the_count_stays_true()
     test_payload_stays_small_at_real_scale()

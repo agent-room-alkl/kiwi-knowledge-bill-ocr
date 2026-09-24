@@ -13,7 +13,12 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from extract_normalize import collapse_merchant, descriptor_core, normalize_merchant
+from extract_normalize import (
+    collapse_merchant,
+    descriptor_core,
+    looks_like_payer_name,
+    normalize_merchant,
+)
 
 UTILITY_TYPES = frozenset({"power", "water", "gas", "internet", "phone_mobile", "other_utility"})
 INSURANCE_TYPES = frozenset({
@@ -642,6 +647,36 @@ def memory_classification(
     return None
 
 
+def payer_classification(txn: dict[str, Any]) -> dict[str, Any] | None:
+    """Side-business takings for an inflow under a person's name, or None.
+
+    Memory can only speak for merchants an accepted run already saw, which
+    makes it useless for the payers of the next applicant - and their payers
+    are the bulk of what a side business looks like on a statement. This is
+    the general form of the same call: it reads the shape of the name instead
+    of matching a remembered one, so it works on a binder the engine has
+    never processed.
+
+    Only inflows. `ZHANG,MENG` arriving is revenue; the same name leaving is
+    the applicant paying somebody, and calling that revenue would both invent
+    income and hide a living expense.
+    """
+    if str(txn.get("direction") or "") != "inflow":
+        return None
+    for field in ("merchant_normalized", "description"):
+        value = str(txn.get(field) or "").strip()
+        if value and looks_like_payer_name(value):
+            return {
+                "category": "business_receipts",
+                "is_business": "yes",
+                "income_type": "business_receipts",
+                "include_in_living_expenses": False,
+                "business_reason": "inflow under a person's name",
+                "reason": "payer name: side-business gross receipts, not net profit",
+            }
+    return None
+
+
 def _liability_rows(
     accounts: list[dict[str, Any]], joined: list[dict[str, Any]],
     calculations: list[dict[str, Any]],
@@ -1018,6 +1053,9 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         if source is None:
             cls = memory_classification(txn, memory)
             source = "memory" if cls else None
+        if source is None:
+            cls = payer_classification(txn)
+            source = "payer_name" if cls else None
         classified = isinstance(cls, dict) and bool(cls)
         cls = cls or {}
         category = cls.get("category") or "unclear"
@@ -1745,6 +1783,13 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             "memory_filled_rows": sum(
                 1 for r in joined
                 if r.get("classification_source") == "memory" and r.get("direction") != "info"
+            ),
+            # New payer names are deliberately not remembered. This is the
+            # generic inflow rule's contribution on the current binder.
+            "payer_name_filled_rows": sum(
+                1 for r in joined
+                if r.get("classification_source") == "payer_name"
+                and r.get("direction") != "info"
             ),
             # The names behind join_miss_rows, so a repair pass has something
             # to act on after the HTTP layer drops part2. Capped; the count
