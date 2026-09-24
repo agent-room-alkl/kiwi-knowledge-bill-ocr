@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Deployment Guide - kiwi-knowledge-bill-ocr</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #0078d4;
+            font-size: 2.5em;
+            margin-bottom: 0.5em;
+            border-bottom: 3px solid #0078d4;
+            padding-bottom: 0.3em;
+        }
+
+        h2 {
+            color: #106ebe;
+            font-size: 1.8em;
+            margin-top: 1.5em;
+            margin-bottom: 0.8em;
+            padding-top: 0.5em;
+            border-top: 2px solid #e1e4e8;
+        }
+
+        h3 {
+            color: #424242;
+            font-size: 1.3em;
+            margin-top: 1.2em;
+            margin-bottom: 0.6em;
+        }
+
+        h4 {
+            color: #616161;
+            font-size: 1.1em;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+        }
+
+        p {
+            margin-bottom: 1em;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 2em;
+        }
+
+        .meta {
+            background: #f6f8fa;
+            border-left: 4px solid #0078d4;
+            padding: 15px;
+            margin-bottom: 2em;
+            font-size: 0.95em;
+        }
+
+        .meta p {
+            margin-bottom: 0.3em;
+        }
+
+        .toc {
+            background: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 20px 30px;
+            margin: 2em 0;
+        }
+
+        .toc h2 {
+            margin-top: 0;
+            border-top: none;
+            font-size: 1.5em;
+        }
+
+        .toc ol {
+            margin-left: 1.5em;
+            margin-top: 1em;
+        }
+
+        .toc li {
+            margin-bottom: 0.5em;
+        }
+
+        .toc a {
+            color: #0078d4;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        ul, ol {
+            margin-left: 2em;
+            margin-bottom: 1em;
+        }
+
+        li {
+            margin-bottom: 0.5em;
+        }
+
+        code {
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            color: #d73a49;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 1.5em;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: #f8f8f2;
+            font-size: 1em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5em;
+            font-size: 0.95em;
+        }
+
+        th, td {
+            border: 1px solid #e1e4e8;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background: #f6f8fa;
+            font-weight: 600;
+            color: #24292e;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .callout {
+            padding: 15px 20px;
+            margin-bottom: 1.5em;
+            border-radius: 6px;
+            border-left: 5px solid;
+        }
+
+        .callout-warning {
+            background: #fff3cd;
+            border-color: #ff9800;
+            color: #856404;
+        }
+
+        .callout-important {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+
+        .callout-info {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+
+        .callout-success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+
+        .callout strong {
+            display: block;
+            margin-bottom: 0.5em;
+            font-size: 1.05em;
+        }
+
+        .expected-result {
+            background: #e7f3e7;
+            border-left: 4px solid #4caf50;
+            padding: 10px 15px;
+            margin: 1em 0;
+            border-radius: 4px;
+        }
+
+        .expected-result::before {
+            content: "✓ Expected Result: ";
+            font-weight: 600;
+            color: #2e7d32;
+        }
+
+        .next-step {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 10px 15px;
+            margin: 1em 0;
+            border-radius: 4px;
+        }
+
+        .next-step::before {
+            content: "→ Next Step: ";
+            font-weight: 600;
+            color: #1565c0;
+        }
+
+        .checklist {
+            background: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 2em 0;
+        }
+
+        .checklist h2 {
+            margin-top: 0;
+            border-top: none;
+        }
+
+        .checklist ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .checklist li::before {
+            content: "☐ ";
+            font-size: 1.2em;
+            margin-right: 0.5em;
+            color: #666;
+        }
+
+        .architecture-diagram {
+            margin: 2em 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 8px;
+            border: 1px solid #e1e4e8;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #0078d4;
+            color: white;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            text-align: center;
+            line-height: 35px;
+            margin-right: 10px;
+            font-weight: 600;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1em;
+        }
+
+        a {
+            color: #0078d4;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                max-width: 100%;
+                box-shadow: none;
+                padding: 20px;
+            }
+
+            .callout {
+                page-break-inside: avoid;
+            }
+
+            pre {
+                page-break-inside: avoid;
+            }
+
+            h2 {
+                page-break-after: avoid;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            h2 {
+                font-size: 1.5em;
+            }
+
+            table {
+                font-size: 0.85em;
+            }
+
+            .step-number {
+                width: 30px;
+                height: 30px;
+                line-height: 30px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Azure Deployment Guide</h1>
+        <p class="subtitle">Deploy the NZ bank-statement servicing assessment stack from scratch</p>
+
+        <div class="meta">
+            <p><strong>Repository:</strong> <a href="https://github.com/agent-room-alkl/kiwi-knowledge-bill-ocr">https://github.com/agent-room-alkl/kiwi-knowledge-bill-ocr</a></p>
+            <p><strong>Target branch:</strong> main</p>
+            <p><strong>Document language:</strong> English</p>
+            <p><strong>Last updated:</strong> 2026-09-24</p>
+        </div>
+
+        <div class="callout callout-important">
+            <strong>⚠️ Important</strong>
+            <p>This guide contains NO secret values. All credentials must be obtained from Azure Portal and configured in your deployment. Never commit keys, connection strings, or SAS tokens to git.</p>
+        </div>
+
+        <div class="toc">
+            <h2>Table of Contents</h2>
+            <ol>
+                <li><a href="#prerequisites">Prerequisites</a></li>
+                <li><a href="#step1">Clone the Repository</a></li>
+                <li><a href="#step2">Create Resource Group</a></li>
+                <li><a href="#step3">Create Storage Account and Containers</a></li>
+                <li><a href="#step4">Create Document Intelligence Resource</a></li>
+                <li><a href="#step5">Create App Service Plan and Function App</a></li>
+                <li><a href="#step6">Configure Function App Settings</a></li>
+                <li><a href="#step7">Publish the Function App</a></li>
+                <li><a href="#step8">Smoke Test the Functions</a></li>
+                <li><a href="#step9">Azure AI Foundry Setup</a></li>
+                <li><a href="#step10">Attach Custom OpenAPI Service</a></li>
+                <li><a href="#step11">End-to-End Test</a></li>
+                <li><a href="#step12">Troubleshooting</a></li>
+                <li><a href="#privacy">Privacy and Security Rules</a></li>
+                <li><a href="#checklist">Completion Checklist</a></li>
+            </ol>
+        </div>
+
+        <div class="architecture-diagram">
+            <h2>System Architecture</h2>
+            <svg viewBox="0 0 1000 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="arch-title arch-desc">
+                <title id="arch-title">Azure Deployment Architecture Diagram</title>
+                <desc id="arch-desc">Shows the flow from user/Foundry chat through AI Foundry Agent to Azure Functions, Document Intelligence, and Blob Storage, with data flowing back as xlsx/HTML reports. Highlights that secrets never go in git.</desc>
+                
+                <defs>
+                    <style>
+                        .box { fill: white; stroke: #0078d4; stroke-width: 2; }
+                        .box-agent { fill: #e1f5ff; stroke: #0078d4; stroke-width: 2; }
+                        .box-func { fill: #fff4e5; stroke: #ff9800; stroke-width: 2; }
+                        .box-di { fill: #e8f5e9; stroke: #4caf50; stroke-width: 2; }
+                        .box-blob { fill: #f3e5f5; stroke: #9c27b0; stroke-width: 2; }
+                        .title-text { font-size: 16px; font-weight: 600; fill: #333; }
+                        .sub-text { font-size: 13px; fill: #666; }
+                        .small-text { font-size: 11px; fill: #666; }
+                        .arrow { stroke: #0078d4; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+                        .arrow-data { stroke: #4caf50; stroke-width: 2; fill: none; marker-end: url(#arrowhead-green); }
+                        .label-text { font-size: 12px; fill: #0078d4; font-weight: 500; }
+                        .warning-text { font-size: 14px; fill: #d32f2f; font-weight: 600; }
+                    </style>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                        <polygon points="0 0, 10 3, 0 6" fill="#0078d4" />
+                    </marker>
+                    <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                        <polygon points="0 0, 10 3, 0 6" fill="#4caf50" />
+                    </marker>
+                </defs>
+
+                <!-- User/Foundry Chat -->
+                <rect x="300" y="20" width="400" height="60" class="box" rx="5"/>
+                <text x="500" y="45" text-anchor="middle" class="title-text">USER / FOUNDRY CHAT</text>
+                <text x="500" y="65" text-anchor="middle" class="small-text">Initiate assessment requests</text>
+
+                <!-- AI Foundry Agent -->
+                <rect x="250" y="120" width="500" height="150" class="box-agent" rx="5"/>
+                <text x="500" y="145" text-anchor="middle" class="title-text">Azure AI Foundry Agent</text>
+                
+                <rect x="270" y="160" width="210" height="50" class="box" rx="3"/>
+                <text x="375" y="180" text-anchor="middle" class="sub-text">Model Deployment</text>
+                <text x="375" y="197" text-anchor="middle" class="small-text">(gpt-4o, gpt-4-turbo, etc)</text>
+
+                <rect x="520" y="160" width="210" height="50" class="box" rx="3"/>
+                <text x="625" y="180" text-anchor="middle" class="sub-text">OpenAPI Custom Tool</text>
+                <text x="625" y="197" text-anchor="middle" class="small-text">(vikas_servicing)</text>
+
+                <text x="500" y="235" text-anchor="middle" class="small-text">Instructions from: PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</text>
+                <text x="500" y="253" text-anchor="middle" class="small-text">OpenAPI spec: openapi-servicing.json</text>
+
+                <!-- Function-key auth -->
+                <rect x="350" y="285" width="300" height="30" fill="#fff3cd" stroke="#ff9800" stroke-width="1" rx="3"/>
+                <text x="500" y="305" text-anchor="middle" class="small-text" fill="#856404">Function-key auth (x-functions-key header)</text>
+
+                <!-- Azure Function App -->
+                <rect x="200" y="340" width="600" height="200" class="box-func" rx="5"/>
+                <text x="500" y="365" text-anchor="middle" class="title-text">Azure Function App</text>
+                <text x="500" y="383" text-anchor="middle" class="small-text">/api prefix</text>
+
+                <rect x="230" y="400" width="170" height="45" class="box" rx="3"/>
+                <text x="315" y="418" text-anchor="middle" class="sub-text">extract_and_normalize</text>
+                <text x="315" y="433" text-anchor="middle" class="small-text">PDF → canonical rows</text>
+
+                <rect x="415" y="400" width="170" height="45" class="box" rx="3"/>
+                <text x="500" y="418" text-anchor="middle" class="sub-text">compute_summary</text>
+                <text x="500" y="433" text-anchor="middle" class="small-text">classifications → totals</text>
+
+                <rect x="600" y="400" width="170" height="45" class="box" rx="3"/>
+                <text x="685" y="418" text-anchor="middle" class="sub-text">render_report</text>
+                <text x="685" y="433" text-anchor="middle" class="small-text">summary → xlsx/HTML</text>
+
+                <text x="500" y="465" text-anchor="middle" class="small-text">Three HTTP endpoints</text>
+                <text x="500" y="483" text-anchor="middle" class="small-text">App Settings: 7 required (DOCUMENTINTELLIGENCE_*, STATEMENTS_STORAGE_*, etc)</text>
+                <text x="500" y="501" text-anchor="middle" class="small-text">Application Insights: Telemetry and logging</text>
+
+                <!-- Document Intelligence -->
+                <rect x="50" y="600" width="350" height="120" class="box-di" rx="5"/>
+                <text x="225" y="625" text-anchor="middle" class="title-text">Document Intelligence</text>
+                <text x="225" y="645" text-anchor="middle" class="sub-text">prebuilt-layout OCR</text>
+                <text x="225" y="675" text-anchor="middle" class="small-text">DOCUMENTINTELLIGENCE_ENDPOINT</text>
+                <text x="225" y="693" text-anchor="middle" class="small-text">DOCUMENTINTELLIGENCE_KEY</text>
+
+                <!-- Blob Storage -->
+                <rect x="450" y="600" width="500" height="250" class="box-blob" rx="5"/>
+                <text x="700" y="625" text-anchor="middle" class="title-text">Blob Storage</text>
+                <text x="700" y="645" text-anchor="middle" class="sub-text">STATEMENTS_STORAGE_CONNECTION_STRING</text>
+
+                <rect x="480" y="665" width="200" height="60" class="box" rx="3"/>
+                <text x="580" y="685" text-anchor="middle" class="sub-text">vikas-samples</text>
+                <text x="580" y="703" text-anchor="middle" class="small-text">Input binders (PDFs)</text>
+                <text x="580" y="717" text-anchor="middle" class="small-text">EXTRACT_ALLOWED_BINDERS</text>
+
+                <rect x="700" y="665" width="220" height="60" class="box" rx="3"/>
+                <text x="810" y="685" text-anchor="middle" class="sub-text">vikas-batches</text>
+                <text x="810" y="703" text-anchor="middle" class="small-text">batch_id, summary_id</text>
+                <text x="810" y="717" text-anchor="middle" class="small-text">BATCHES_CONTAINER (default)</text>
+
+                <rect x="480" y="740" width="200" height="60" class="box" rx="3"/>
+                <text x="580" y="760" text-anchor="middle" class="sub-text">vikas-reports</text>
+                <text x="580" y="778" text-anchor="middle" class="small-text">Published xlsx/HTML</text>
+                <text x="580" y="792" text-anchor="middle" class="small-text">REPORTS_CONTAINER (default)</text>
+
+                <text x="700" y="825" text-anchor="middle" class="small-text">Container names are examples from demo deployment</text>
+
+                <!-- Arrows - Control Flow -->
+                <path d="M 500 80 L 500 120" class="arrow"/>
+                <text x="520" y="105" class="label-text">request</text>
+
+                <path d="M 500 270 L 500 340" class="arrow"/>
+                <text x="520" y="310" class="label-text">HTTPS call</text>
+
+                <path d="M 230 540 L 180 600" class="arrow"/>
+                <text x="180" y="575" class="label-text">OCR</text>
+
+                <path d="M 500 540 L 500 600" class="arrow"/>
+                <text x="520" y="575" class="label-text">read/write</text>
+
+                <path d="M 685 540 L 750 600" class="arrow"/>
+                <text x="740" y="575" class="label-text">publish</text>
+
+                <!-- Arrows - Data Flow -->
+                <path d="M 225 720 L 280 540" class="arrow-data"/>
+                <text x="220" y="630" class="label-text" fill="#4caf50">layout data</text>
+
+                <path d="M 700 600 L 600 540" class="arrow-data"/>
+                <text x="680" y="575" class="label-text" fill="#4caf50">batches</text>
+
+                <path d="M 750 600 L 740 540" class="arrow-data"/>
+                <text x="770" y="575" class="label-text" fill="#4caf50">reports</text>
+
+                <path d="M 500 340 L 500 270" class="arrow-data"/>
+                <text x="450" y="310" class="label-text" fill="#4caf50">response</text>
+
+                <path d="M 500 120 L 500 80" class="arrow-data"/>
+                <text x="450" y="105" class="label-text" fill="#4caf50">xlsx/HTML URL</text>
+
+                <!-- Security Warning -->
+                <rect x="50" y="870" width="900" height="20" fill="none"/>
+                <text x="500" y="885" text-anchor="middle" class="warning-text">⚠️ SECRETS NEVER GO IN GIT - Configure keys/connection strings in Azure Portal only</text>
+            </svg>
+        </div>
+
+        <h2 id="prerequisites">Prerequisites</h2>
+        <p>Before starting, ensure you have:</p>
+        <ul>
+            <li><strong>Azure CLI</strong> installed and authenticated (<code>az login</code>)</li>
+            <li><strong>Azure Functions Core Tools</strong> v4.x (<code>func --version</code>)</li>
+            <li><strong>Python 3.11+</strong> with pip</li>
+            <li><strong>Git</strong> configured and authenticated to GitHub</li>
+            <li>An <strong>active Azure subscription</strong> with sufficient permissions to create resources</li>
+            <li>A unique prefix for naming resources (e.g., your initials or project code)</li>
+        </ul>
+
+        <div class="callout callout-info">
+            <strong>Verify your setup:</strong>
+            <pre><code>az --version
+func --version
+python3 --version
+git --version
+az account show</code></pre>
+        </div>
+
+        <h2 id="step1">1. Clone the Repository</h2>
+        <div class="step-header">
+            <span class="step-number">1</span>
+            <div>
+                <h3 style="margin: 0;">Clone and checkout the main branch</h3>
+            </div>
+        </div>
+        <pre><code>git clone https://github.com/agent-room-alkl/kiwi-knowledge-bill-ocr.git
+cd kiwi-knowledge-bill-ocr
+git checkout main
+git pull origin main</code></pre>
+
+        <div class="expected-result">Confirm you're on the latest main branch commit.</div>
+
+        <h2 id="step2">2. Create Resource Group</h2>
+        <div class="step-header">
+            <span class="step-number">2</span>
+            <div>
+                <h3 style="margin: 0;">Create an Azure resource group</h3>
+            </div>
+        </div>
+        <p>Choose a region close to your users (e.g., <code>australiaeast</code> for NZ/AU).</p>
+        <pre><code>az group create \
+  --name rg-kiwi-demo \
+  --location australiaeast</code></pre>
+
+        <div class="callout callout-warning">
+            <strong>Note:</strong>
+            <p>Replace <code>rg-kiwi-demo</code> with your preferred resource group name throughout this guide.</p>
+        </div>
+
+        <h2 id="step3">3. Create Storage Account and Containers</h2>
+        <div class="step-header">
+            <span class="step-number">3</span>
+            <div>
+                <h3 style="margin: 0;">Set up blob storage for statements and reports</h3>
+            </div>
+        </div>
+
+        <h3>3.1 Create Storage Account</h3>
+        <pre><code>az storage account create \
+  --name rgkiwidemo88cf \
+  --resource-group rg-kiwi-demo \
+  --location australiaeast \
+  --sku Standard_LRS \
+  --kind StorageV2</code></pre>
+
+        <div class="callout callout-important">
+            <strong>⚠️ Storage account names must be globally unique</strong>
+            <p>3-24 characters, lowercase letters and numbers only. Replace <code>rgkiwidemo88cf</code> with your unique name.</p>
+        </div>
+
+        <h3>3.2 Get Storage Connection String</h3>
+        <pre><code>az storage account show-connection-string \
+  --name rgkiwidemo88cf \
+  --resource-group rg-kiwi-demo \
+  --query connectionString \
+  --output tsv</code></pre>
+
+        <div class="expected-result">Save this connection string securely - you'll need it for Function App configuration.</div>
+
+        <h3>3.3 Create Three Required Containers</h3>
+        <pre><code>STORAGE_CONN="&lt;paste-connection-string-here&gt;"
+
+az storage container create \
+  --name vikas-samples \
+  --connection-string "$STORAGE_CONN"
+
+az storage container create \
+  --name vikas-batches \
+  --connection-string "$STORAGE_CONN"
+
+az storage container create \
+  --name vikas-reports \
+  --connection-string "$STORAGE_CONN"</code></pre>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Container Name</th>
+                    <th>Purpose</th>
+                    <th>Environment Variable</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>vikas-samples</code></td>
+                    <td>Input binders containing statement PDFs</td>
+                    <td><code>EXTRACT_ALLOWED_BINDERS</code></td>
+                </tr>
+                <tr>
+                    <td><code>vikas-batches</code></td>
+                    <td>Stores <code>batch_id</code> and <code>summary_id</code> intermediate results</td>
+                    <td><code>BATCHES_CONTAINER</code> (defaults to vikas-batches)</td>
+                </tr>
+                <tr>
+                    <td><code>vikas-reports</code></td>
+                    <td>Published Excel and HTML reports</td>
+                    <td><code>REPORTS_CONTAINER</code> (defaults to vikas-reports)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="callout callout-warning">
+            <strong>Note:</strong>
+            <p>For a fresh environment, use your own container names. The names above (<code>vikas-*</code>) are examples from the demo deployment and are provided for reference only.</p>
+        </div>
+
+        <h2 id="step4">4. Create Document Intelligence Resource</h2>
+        <div class="step-header">
+            <span class="step-number">4</span>
+            <div>
+                <h3 style="margin: 0;">Set up OCR service for statement processing</h3>
+            </div>
+        </div>
+
+        <pre><code>az cognitiveservices account create \
+  --name kiwi-docs \
+  --resource-group rg-kiwi-demo \
+  --kind FormRecognizer \
+  --sku S0 \
+  --location australiaeast \
+  --yes</code></pre>
+
+        <h3>4.1 Get Document Intelligence Credentials</h3>
+        <pre><code># Get endpoint
+az cognitiveservices account show \
+  --name kiwi-docs \
+  --resource-group rg-kiwi-demo \
+  --query properties.endpoint \
+  --output tsv
+
+# Get key
+az cognitiveservices account keys list \
+  --name kiwi-docs \
+  --resource-group rg-kiwi-demo \
+  --query key1 \
+  --output tsv</code></pre>
+
+        <div class="expected-result">Save both the <strong>endpoint</strong> and <strong>key1</strong> - you'll configure these as <code>DOCUMENTINTELLIGENCE_ENDPOINT</code> and <code>DOCUMENTINTELLIGENCE_KEY</code>.</div>
+
+        <h2 id="step5">5. Create App Service Plan and Function App</h2>
+        <div class="step-header">
+            <span class="step-number">5</span>
+            <div>
+                <h3 style="margin: 0;">Deploy Azure Functions infrastructure</h3>
+            </div>
+        </div>
+
+        <h3>5.1 Create App Service Plan</h3>
+        <pre><code>az functionapp plan create \
+  --name kiwi-demo-plan \
+  --resource-group rg-kiwi-demo \
+  --location australiaeast \
+  --sku B1 \
+  --is-linux</code></pre>
+
+        <h3>5.2 Create Application Insights</h3>
+        <pre><code>az monitor app-insights component create \
+  --app kiwi-demo-insights \
+  --location australiaeast \
+  --resource-group rg-kiwi-demo</code></pre>
+
+        <h3>5.3 Get Application Insights Connection String</h3>
+        <pre><code>az monitor app-insights component show \
+  --app kiwi-demo-insights \
+  --resource-group rg-kiwi-demo \
+  --query connectionString \
+  --output tsv</code></pre>
+
+        <div class="expected-result">Save this connection string for <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>.</div>
+
+        <h3>5.4 Create Function App</h3>
+        <pre><code>az functionapp create \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo \
+  --plan kiwi-demo-plan \
+  --storage-account rgkiwidemo88cf \
+  --runtime python \
+  --runtime-version 3.11 \
+  --functions-version 4 \
+  --os-type Linux \
+  --app-insights kiwi-demo-insights</code></pre>
+
+        <div class="callout callout-important">
+            <strong>Function App name must be globally unique</strong>
+            <p>Replace <code>vikas-servicing-fn</code> with your chosen name.</p>
+        </div>
+
+        <h2 id="step6">6. Configure Function App Settings</h2>
+        <div class="step-header">
+            <span class="step-number">6</span>
+            <div>
+                <h3 style="margin: 0;">Configure 7 required environment variables</h3>
+            </div>
+        </div>
+
+        <div class="callout callout-important">
+            <strong>⚠️ CRITICAL: Never commit these values to git</strong>
+            <p>All credentials must remain in Azure Portal configuration only.</p>
+        </div>
+
+        <pre><code>FUNC_APP_NAME="vikas-servicing-fn"
+RG_NAME="rg-kiwi-demo"
+
+az functionapp config appsettings set \
+  --name "$FUNC_APP_NAME" \
+  --resource-group "$RG_NAME" \
+  --settings \
+    "AzureWebJobsStorage=&lt;paste-storage-connection-string&gt;" \
+    "STATEMENTS_STORAGE_CONNECTION_STRING=&lt;paste-storage-connection-string&gt;" \
+    "DOCUMENTINTELLIGENCE_ENDPOINT=&lt;paste-DI-endpoint&gt;" \
+    "DOCUMENTINTELLIGENCE_KEY=&lt;paste-DI-key&gt;" \
+    "APPLICATIONINSIGHTS_CONNECTION_STRING=&lt;paste-appinsights-connection-string&gt;" \
+    "EXTRACT_ALLOWED_BINDERS=vikas-samples" \
+    "REPORTS_CONTAINER=vikas-reports" \
+    "BATCHES_CONTAINER=vikas-batches"</code></pre>
+
+        <h3>Application Setting Reference</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Setting Name</th>
+                    <th>Description</th>
+                    <th>Example Format</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>AzureWebJobsStorage</code></td>
+                    <td>Function App internal storage connection string</td>
+                    <td><code>DefaultEndpointsProtocol=https;AccountName=...</code></td>
+                </tr>
+                <tr>
+                    <td><code>STATEMENTS_STORAGE_CONNECTION_STRING</code></td>
+                    <td>Statement storage account connection string (typically same as above)</td>
+                    <td><code>DefaultEndpointsProtocol=https;AccountName=...</code></td>
+                </tr>
+                <tr>
+                    <td><code>DOCUMENTINTELLIGENCE_ENDPOINT</code></td>
+                    <td>Document Intelligence resource endpoint URL</td>
+                    <td><code>https://kiwi-docs.cognitiveservices.azure.com/</code></td>
+                </tr>
+                <tr>
+                    <td><code>DOCUMENTINTELLIGENCE_KEY</code></td>
+                    <td>Document Intelligence API key</td>
+                    <td><code>&lt;32-character-hex-key&gt;</code></td>
+                </tr>
+                <tr>
+                    <td><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code></td>
+                    <td>Application Insights connection string for telemetry</td>
+                    <td><code>InstrumentationKey=...;IngestionEndpoint=...</code></td>
+                </tr>
+                <tr>
+                    <td><code>EXTRACT_ALLOWED_BINDERS</code></td>
+                    <td>Comma-separated list of allowed container names for statement input</td>
+                    <td><code>vikas-samples</code> or <code>vikas-samples,prod-statements</code></td>
+                </tr>
+                <tr>
+                    <td><code>REPORTS_CONTAINER</code></td>
+                    <td>Container for published reports (optional, defaults to <code>vikas-reports</code>)</td>
+                    <td><code>vikas-reports</code></td>
+                </tr>
+                <tr>
+                    <td><code>BATCHES_CONTAINER</code></td>
+                    <td>Container for batch storage (optional, defaults to <code>vikas-batches</code>)</td>
+                    <td><code>vikas-batches</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="callout callout-info">
+            <strong>Optional settings:</strong>
+            <p><code>EXTRACT_URL_ALLOWED_HOSTS</code>: Comma-separated allowed URL hosts for <code>file_urls</code> fallback (defaults to <code>*.blob.core.windows.net</code>)</p>
+        </div>
+
+        <h2 id="step7">7. Publish the Function App</h2>
+        <div class="step-header">
+            <span class="step-number">7</span>
+            <div>
+                <h3 style="margin: 0;">Deploy the function code from main branch</h3>
+            </div>
+        </div>
+
+        <p>From your local repository checkout:</p>
+        <pre><code>cd function_app
+func azure functionapp publish vikas-servicing-fn</code></pre>
+
+        <div class="expected-result">
+            <strong>Expected output:</strong>
+            <pre style="margin-top: 0.5em; background: #e7f3e7; color: #333;"><code>Getting site publishing info...
+Creating archive for current directory...
+Uploading &lt;size&gt; KB...
+Deployment successful.
+Remote build succeeded!</code></pre>
+        </div>
+
+        <h3>7.1 Verify Deployment</h3>
+        <pre><code>az functionapp function list \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo \
+  --output table</code></pre>
+
+        <div class="expected-result">
+            <strong>Expected functions:</strong>
+            <ul style="margin-top: 0.5em;">
+                <li><code>extract_and_normalize</code></li>
+                <li><code>compute_summary_http</code></li>
+                <li><code>render_report</code></li>
+            </ul>
+        </div>
+
+        <h3>7.2 Get Function App URL and Key</h3>
+        <pre><code># Get the Function App host URL
+az functionapp show \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo \
+  --query defaultHostName \
+  --output tsv
+
+# Get the function key
+az functionapp keys list \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo \
+  --query functionKeys</code></pre>
+
+        <div class="expected-result">Save the <strong>default function key</strong> - you'll need it for Foundry agent authentication in Step 10.</div>
+
+        <h2 id="step8">8. Smoke Test the Functions</h2>
+        <div class="step-header">
+            <span class="step-number">8</span>
+            <div>
+                <h3 style="margin: 0;">Verify functions are deployed and reachable</h3>
+            </div>
+        </div>
+
+        <p>Test each function endpoint to verify deployment. These requests use empty bodies, so expect <strong>HTTP 400 validation errors</strong> (not 404 or 500 - those indicate routing or runtime failures).</p>
+
+        <pre><code>FUNC_HOST="&lt;your-func-app&gt;.azurewebsites.net"
+FUNC_KEY="&lt;paste-function-key&gt;"
+
+# Test extract_and_normalize
+curl -X POST "https://${FUNC_HOST}/api/extract_and_normalize?code=${FUNC_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  -w "\nHTTP Status: %{http_code}\n"
+
+# Test compute_summary
+curl -X POST "https://${FUNC_HOST}/api/compute_summary?code=${FUNC_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  -w "\nHTTP Status: %{http_code}\n"
+
+# Test render_report
+curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  -w "\nHTTP Status: %{http_code}\n"</code></pre>
+
+        <div class="expected-result">
+            <strong>✓ Success:</strong> HTTP 400 with JSON error message (e.g., <code>"supply binder, file_urls or files; extraction has nothing to read"</code>)
+        </div>
+
+        <div class="callout callout-important">
+            <strong>✗ Failure indicators:</strong>
+            <ul>
+                <li>HTTP 404 (function not found - check deployment)</li>
+                <li>HTTP 500 (runtime error - check app settings and logs)</li>
+                <li>Connection timeout (check Function App is running)</li>
+            </ul>
+        </div>
+
+        <h2 id="step9">9. Azure AI Foundry Setup</h2>
+        <div class="step-header">
+            <span class="step-number">9</span>
+            <div>
+                <h3 style="margin: 0;">Create AI Foundry project, deploy model, and create agent</h3>
+            </div>
+        </div>
+
+        <h3>9.1 Create AI Foundry Project</h3>
+        <ol>
+            <li>Navigate to <strong>Azure AI Foundry</strong> at <a href="https://ai.azure.com">https://ai.azure.com</a></li>
+            <li>Select your subscription and create a new <strong>AI Hub</strong> (if you don't have one)</li>
+            <li>Create a new <strong>Project</strong> under that hub:
+                <ul>
+                    <li><strong>Name:</strong> <code>kiwi-knowage-proj</code> (or your preferred name)</li>
+                    <li><strong>Region:</strong> Same as your Function App (e.g., <code>australiaeast</code>)</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>9.2 Deploy Chat Model</h3>
+        <ol>
+            <li>In your AI Foundry project, go to <strong>Deployments</strong> → <strong>+ Create deployment</strong></li>
+            <li>Select your preferred model (e.g., <code>gpt-4o</code>, <code>gpt-4-turbo</code>, or <code>gpt-3.5-turbo</code>)</li>
+            <li>Configure:
+                <ul>
+                    <li><strong>Deployment name:</strong> <code>gpt-5</code> or your chosen name</li>
+                    <li><strong>Model version:</strong> Latest available</li>
+                    <li><strong>Tokens per minute rate limit:</strong> Set according to your needs</li>
+                </ul>
+            </li>
+            <li><strong>Deploy</strong> and wait for the deployment to complete</li>
+        </ol>
+
+        <h3>9.3 Create the Agent</h3>
+        <ol>
+            <li>In your AI Foundry project, go to <strong>Agents</strong> → <strong>+ Create agent</strong></li>
+            <li>Configure:
+                <ul>
+                    <li><strong>Name:</strong> <code>vikas-agent-demo</code> (or your preferred name)</li>
+                    <li><strong>Model deployment:</strong> Select the deployment you created above</li>
+                    <li><strong>Description:</strong> "NZ bank statement servicing assessment agent"</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>9.4 Paste Agent Instructions</h3>
+        <div class="callout callout-important">
+            <strong>⚠️ CRITICAL STEP</strong>
+            <p>The agent instructions define how the model classifies transactions and calls the functions. This file is the exact prompt the agent must follow.</p>
+        </div>
+
+        <ol>
+            <li>Open the file <code>foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code> in your repository</li>
+            <li><strong>Copy the entire contents</strong> of that file (byte-identical to <code>foundry/prompt-foundry-v2.md</code>)</li>
+            <li>In the agent configuration, go to the <strong>Instructions</strong> section</li>
+            <li><strong>Paste</strong> the instructions into the text field</li>
+            <li><strong>Save</strong> the agent</li>
+        </ol>
+
+        <div class="callout callout-info">
+            <strong>When to re-paste instructions:</strong>
+            <ul>
+                <li><strong>✓ DO re-paste</strong> when updating the repository if <code>PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code> has changed</li>
+                <li><strong>✗ DON'T re-paste</strong> if the file content is unchanged - keep existing tested instructions</li>
+            </ul>
+        </div>
+
+        <h2 id="step10">10. Attach Custom OpenAPI Service</h2>
+        <div class="step-header">
+            <span class="step-number">10</span>
+            <div>
+                <h3 style="margin: 0;">Connect Foundry agent to your deployed Azure Functions</h3>
+            </div>
+        </div>
+
+        <p>This step connects your Foundry agent to the three Azure Functions you deployed: <code>extract_and_normalize</code>, <code>compute_summary</code>, and <code>render_report</code>.</p>
+
+        <h3>10.1 Update OpenAPI Specification</h3>
+        <ol>
+            <li>Open <code>foundry/openapi-servicing.json</code> in your repository</li>
+            <li>Find the <code>servers</code> section (around line 10):
+<pre><code>"servers": [
+  {
+    "url": "https://vikas-servicing-fn-a3cacpaqhccgc7dy.australiaeast-01.azurewebsites.net/api"
+  }
+]</code></pre>
+            </li>
+            <li>Replace the URL with your Function App URL:
+<pre><code>"servers": [
+  {
+    "url": "https://&lt;your-func-app&gt;.azurewebsites.net/api"
+  }
+]</code></pre>
+            </li>
+        </ol>
+
+        <div class="callout callout-warning">
+            <strong>Important:</strong>
+            <p>Include the <code>/api</code> path prefix. This is the route prefix configured in the Function App's <code>host.json</code>.</p>
+        </div>
+
+        <h3>10.2 Create Custom Service in Foundry</h3>
+        <ol>
+            <li>In your AI Foundry agent, go to <strong>Tools</strong> or <strong>Actions</strong></li>
+            <li>Click <strong>+ Add</strong> or <strong>+ Add tool</strong></li>
+            <li>Select <strong>Custom OpenAPI service</strong> or <strong>OpenAPI specified tool</strong></li>
+            <li>Configure:
+                <ul>
+                    <li><strong>Name:</strong> <code>vikas_servicing</code></li>
+                    <li><strong>Description:</strong> <code>Extract NZ bank statements, compute servicing totals in code, render Excel and HTML reports. The model classifies only; never invents Part 1 numbers.</code></li>
+                    <li><strong>OpenAPI Specification:</strong> Copy the <strong>entire contents</strong> of your updated <code>foundry/openapi-servicing.json</code> and paste it</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>10.3 Configure Authentication</h3>
+        <p>The OpenAPI spec defines a security scheme <code>functionsKey</code>:</p>
+<pre><code>"securitySchemes": {
+  "functionsKey": {
+    "type": "apiKey",
+    "name": "x-functions-key",
+    "in": "header"
+  }
+}</code></pre>
+
+        <p>In Foundry:</p>
+        <ol>
+            <li>Set <strong>Authentication type</strong> to <strong>API Key</strong></li>
+            <li>Configure:
+                <ul>
+                    <li><strong>Header name:</strong> <code>x-functions-key</code></li>
+                    <li><strong>API key value:</strong> Paste your Function App default function key from Step 7.2</li>
+                </ul>
+            </li>
+        </ol>
+
+        <div class="callout callout-info">
+            <strong>Alternative for production:</strong>
+            <p>Use Managed Identity authentication if your Foundry project and Function App support it.</p>
+        </div>
+
+        <h3>10.4 Verify Tool Attachment</h3>
+        <ol>
+            <li>Save the custom service</li>
+            <li>Confirm the tool shows <strong>three operations</strong>:
+                <ul>
+                    <li><code>extract_and_normalize</code></li>
+                    <li><code>compute_summary</code></li>
+                    <li><code>render_report</code></li>
+                </ul>
+            </li>
+            <li>Check that each operation displays parameter schemas correctly</li>
+        </ol>
+
+        <div class="next-step">See <code>foundry/HOW_TO_HANG_TOOLS.md</code> for additional detailed attachment instructions.</div>
+
+        <h2 id="step11">11. End-to-End Test</h2>
+        <div class="step-header">
+            <span class="step-number">11</span>
+            <div>
+                <h3 style="margin: 0;">Test the complete workflow from chat to report</h3>
+            </div>
+        </div>
+
+        <h3>11.1 Upload Test Statements</h3>
+        <p>Upload sample statement PDFs to your <code>vikas-samples</code> container (or whichever container you configured in <code>EXTRACT_ALLOWED_BINDERS</code>):</p>
+
+        <pre><code># Using Azure CLI
+az storage blob upload \
+  --container-name vikas-samples \
+  --file ./path/to/statement.pdf \
+  --name statement.pdf \
+  --connection-string "$STORAGE_CONN"</code></pre>
+
+        <div class="callout callout-warning">
+            <strong>Note:</strong>
+            <p>Use synthetic/test statements only. <strong>Never upload files containing real customer names or personal information.</strong></p>
+        </div>
+
+        <h3>11.2 Test Chat - Excel Output</h3>
+        <p>In the Foundry agent chat interface:</p>
+
+        <div class="callout callout-success">
+            <strong>Prompt:</strong>
+            <pre style="margin-top: 0.5em;"><code>Use binder vikas-samples and run the assessment.</code></pre>
+        </div>
+
+        <p><strong>Optional with assessment date:</strong></p>
+        <pre><code>Use binder vikas-samples, assessment_date 2026-09-24, and run the assessment.</code></pre>
+
+        <div class="expected-result">
+            <strong>Expected behavior:</strong>
+            <ol style="margin-top: 0.5em;">
+                <li>Agent calls <code>extract_and_normalize</code> with <code>binder: "vikas-samples"</code></li>
+                <li>Agent classifies the <code>classification_worklist</code> entries</li>
+                <li>Agent calls <code>compute_summary</code> with <code>batch_id</code> and classifications</li>
+                <li>Agent calls <code>render_report</code> with <code>summary_id</code></li>
+                <li>Agent returns a <strong>download URL</strong> for <code>lender-assessment.xlsx</code></li>
+            </ol>
+        </div>
+
+        <h3>11.3 Test Chat - HTML Output</h3>
+        <div class="callout callout-success">
+            <strong>Prompt:</strong>
+            <pre style="margin-top: 0.5em;"><code>Use binder vikas-samples and run the assessment in HTML format.</code></pre>
+        </div>
+
+        <p><strong>Or explicitly:</strong></p>
+        <pre><code>Use binder vikas-samples, format=html, and run the assessment.</code></pre>
+
+        <div class="expected-result">
+            <strong>Expected behavior:</strong>
+            <ul style="margin-top: 0.5em;">
+                <li>Same flow as Excel test above</li>
+                <li>Agent calls <code>render_report</code> with <code>summary_id</code> and <code>format: "html"</code></li>
+                <li>Agent returns a <strong>download URL</strong> for <code>lender-assessment.html</code></li>
+            </ul>
+        </div>
+
+        <h3>11.4 Test Chat - Both Formats</h3>
+        <div class="callout callout-success">
+            <strong>Prompt:</strong>
+            <pre style="margin-top: 0.5em;"><code>Use binder vikas-samples, format=both, and run the assessment.</code></pre>
+        </div>
+
+        <div class="expected-result">
+            <strong>Expected behavior:</strong>
+            <ul style="margin-top: 0.5em;">
+                <li>Agent calls <code>render_report</code> with <code>summary_id</code> and <code>format: "both"</code></li>
+                <li>Agent returns <strong>two download URLs</strong>: one for xlsx and one for html</li>
+            </ul>
+        </div>
+
+        <h2 id="step12">12. Troubleshooting</h2>
+        <div class="step-header">
+            <span class="step-number">12</span>
+            <div>
+                <h3 style="margin: 0;">Common issues and solutions</h3>
+            </div>
+        </div>
+
+        <h3>Common Issues</h3>
+
+        <h4>401 Unauthorized</h4>
+        <ul>
+            <li><strong>Cause:</strong> Incorrect or missing Function key in Foundry authentication</li>
+            <li><strong>Fix:</strong> Verify the <code>x-functions-key</code> header value matches your Function App key from Step 7.2</li>
+        </ul>
+
+        <h4>404 Not Found</h4>
+        <ul>
+            <li><strong>Cause:</strong> Function routes not deployed or incorrect OpenAPI server URL</li>
+            <li><strong>Fix:</strong>
+                <ul>
+                    <li>Verify functions deployed: <code>az functionapp function list --name &lt;app&gt; --resource-group &lt;rg&gt; --output table</code></li>
+                    <li>Check OpenAPI <code>servers[0].url</code> matches your Function App host</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h4>400 Bad Request - "supply binder, file_urls or files"</h4>
+        <ul>
+            <li><strong>Cause:</strong> Agent not passing <code>binder</code> parameter correctly</li>
+            <li><strong>Fix:</strong> Re-check agent instructions match <code>PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code></li>
+        </ul>
+
+        <h4>500 Internal Server Error - "DOCUMENTINTELLIGENCE_ENDPOINT not configured"</h4>
+        <ul>
+            <li><strong>Cause:</strong> Missing Document Intelligence settings</li>
+            <li><strong>Fix:</strong> Verify all 7 app settings from Step 6 are configured</li>
+        </ul>
+
+        <h4>Tool not called / agent tries to do OCR itself</h4>
+        <ul>
+            <li><strong>Cause:</strong> Instructions not pasted, or Code Interpreter still enabled</li>
+            <li><strong>Fix:</strong>
+                <ul>
+                    <li>Re-paste instructions from <code>PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code></li>
+                    <li>Disable Code Interpreter in agent settings</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h4>Batch/summary truncated errors</h4>
+        <ul>
+            <li><strong>Cause:</strong> Agent passing <code>canonical</code> or <code>summary</code> instead of <code>batch_id</code>/<code>summary_id</code></li>
+            <li><strong>Fix:</strong> Instructions already handle this; re-paste if error persists</li>
+        </ul>
+
+        <h3>Viewing Function Logs</h3>
+        <pre><code># Stream live logs
+az functionapp log tail \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo
+
+# View recent invocations in Application Insights
+az monitor app-insights query \
+  --app kiwi-demo-insights \
+  --resource-group rg-kiwi-demo \
+  --analytics-query "requests | where timestamp > ago(1h) | order by timestamp desc | take 20"</code></pre>
+
+        <h3>Rollback to Previous Deployment</h3>
+        <p>If a deployment fails:</p>
+
+        <ol>
+            <li>Find the previous deployment ID:
+<pre><code>az webapp deployment list \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo \
+  --query "[].{id:id, status:status, active:active, receivedTime:receivedTime}" \
+  --output table</code></pre>
+            </li>
+            <li>Re-deploy the last known-good commit:
+<pre><code>git checkout &lt;previous-commit-sha&gt;
+cd function_app
+func azure functionapp publish vikas-servicing-fn</code></pre>
+            </li>
+            <li>If Foundry instructions changed, restore previous version (only if PASTE file changed in the failed release)</li>
+        </ol>
+
+        <h2 id="privacy">Privacy and Security Rules</h2>
+
+        <h3>⚠️ Never Commit Secrets</h3>
+        <p>The following must <strong>NEVER</strong> be committed to git:</p>
+        <ul>
+            <li>Connection strings (storage, Application Insights)</li>
+            <li>API keys (Document Intelligence, Function keys)</li>
+            <li>SAS tokens</li>
+            <li>Real applicant names or PII</li>
+            <li>Real bank statement files</li>
+        </ul>
+
+        <h3>Local-Only Content</h3>
+        <ul>
+            <li>Folder <code>from vikas/</code> (if present on your local machine) is <strong>local-only</strong>. Never commit, push, or upload.</li>
+            <li>Do not upload files containing real human names, applicant PII, or statement-derived personal data.</li>
+            <li><code>VIKAS-ATTACHMENTS-ANALYSIS.md</code> is host-private analysis and was removed in PR #6 - do not re-add.</li>
+        </ul>
+
+        <h3>Rebuilding Merchant Memory</h3>
+        <p>If you need to rebuild safe brand memory:</p>
+        <pre><code>python3 pipeline/build_merchant_memory.py</code></pre>
+        <p>This generates <code>function_app/merchant_memory.json</code> with safe fallback merchant classifications (no PII).</p>
+
+        <h2 id="checklist">Completion Checklist</h2>
+        <div class="checklist">
+            <h2>Use this checklist to confirm your deployment is complete:</h2>
+            <ul>
+                <li>Resource group created</li>
+                <li>Storage account created with three containers (<code>samples</code>, <code>batches</code>, <code>reports</code>)</li>
+                <li>Document Intelligence resource created and credentials obtained</li>
+                <li>Function App created with App Service Plan and Application Insights</li>
+                <li>All 7 application settings configured</li>
+                <li>Functions published successfully (<code>func azure functionapp publish</code>)</li>
+                <li>Smoke tests pass (HTTP 400 on empty body, not 404/500)</li>
+                <li>AI Foundry project created with model deployed</li>
+                <li>Foundry agent created with instructions pasted from <code>PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code></li>
+                <li>OpenAPI service attached with correct server URL and Function key auth</li>
+                <li>End-to-end test produces xlsx download URL</li>
+                <li>End-to-end test produces html download URL (when <code>format=html</code> or <code>format=both</code>)</li>
+                <li>Test statements uploaded to samples container</li>
+                <li>No secrets committed to repository</li>
+            </ul>
+        </div>
+
+        <h2>Additional Resources</h2>
+        <ul>
+            <li><strong>OpenAPI Specification:</strong> <code>foundry/openapi-servicing.json</code></li>
+            <li><strong>Agent Instructions:</strong> <code>foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code></li>
+            <li><strong>Tool Attachment Guide:</strong> <code>foundry/HOW_TO_HANG_TOOLS.md</code></li>
+            <li><strong>Repository README:</strong> <code>README.md</code></li>
+            <li><strong>Classification Taxonomy:</strong> <code>schemas/taxonomy.md</code></li>
+            <li><strong>Canonical Transaction Schema:</strong> <code>schemas/canonical-transaction.schema.json</code></li>
+            <li><strong>Report View Schema:</strong> <code>schemas/report-view.schema.json</code></li>
+        </ul>
+
+        <hr style="margin: 2em 0; border: none; border-top: 1px solid #e1e4e8;">
+
+        <div class="meta" style="margin-top: 2em;">
+            <p><strong>Document version:</strong> 2026-09-24</p>
+            <p><strong>Covers:</strong> Tasks T-16 (Markdown runbook), T-17 (HTML with embedded CSS), T-18 (Inline SVG architecture diagram)</p>
+            <p><strong>Related deliverables:</strong> <code>docs/AZURE_DEPLOYMENT_GUIDE.md</code></p>
+        </div>
+    </div>
+</body>
+</html>
