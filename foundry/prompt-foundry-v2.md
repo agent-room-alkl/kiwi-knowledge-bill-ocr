@@ -112,10 +112,7 @@ put it in recommended living.
 
 Person-name **outflows** in that food-trade pattern are business
 COGS/payouts: `is_business` yes, include false, not household grocery.
-When the binder shows person-name inflows as `business_receipts`, any
-matching person-name outflows (PAY / BILL PAYMENT / DIRECT CREDIT to those
-same names) MUST be classified `is_business` yes, `include_in_living_expenses`
-false, reason `side-business payout/COGS`. Never classify them as `unclear`.
+Person-name outflows outside that food-trade pattern are not auto-forced to is_business; classify normally (household / transfer / unclear as warranted) so living expenses are not understated.
 
 Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering
 channel) → `is_business` yes, include false, `wholesale stock / COGS`.
