@@ -32,8 +32,8 @@ output "storage_containers" {
   description = "Storage container names"
   value = {
     input_containers = local.containers
-    reports = var.reports_container_override != "" ? var.reports_container_override : "vikas-reports"
-    batches = var.batches_container_override != "" ? var.batches_container_override : "vikas-batches"
+    reports          = var.reports_container_override != "" ? var.reports_container_override : "vikas-reports"
+    batches          = var.batches_container_override != "" ? var.batches_container_override : "vikas-batches"
   }
 }
 

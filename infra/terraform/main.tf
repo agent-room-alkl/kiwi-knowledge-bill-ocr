@@ -205,10 +205,10 @@ resource "azurerm_linux_function_app" "main" {
     "WEBSITE_RUN_FROM_PACKAGE"              = "1"
 
     # Operator-Provided (set via terraform.tfvars)
-    "DOCUMENTINTELLIGENCE_ENDPOINT"       = azurerm_cognitive_account.doc_intelligence.endpoint
-    "DOCUMENTINTELLIGENCE_KEY"            = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence.primary_access_key
+    "DOCUMENTINTELLIGENCE_ENDPOINT"        = azurerm_cognitive_account.doc_intelligence.endpoint
+    "DOCUMENTINTELLIGENCE_KEY"             = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence.primary_access_key
     "STATEMENTS_STORAGE_CONNECTION_STRING" = azurerm_storage_account.main.primary_connection_string
-    "EXTRACT_ALLOWED_BINDERS"             = join(",", local.containers)
+    "EXTRACT_ALLOWED_BINDERS"              = join(",", local.containers)
 
     # Optional Container Overrides (operator can customize)
     "REPORTS_CONTAINER" = var.reports_container_override != "" ? var.reports_container_override : "vikas-reports"
