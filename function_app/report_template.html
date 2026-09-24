@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{REPORT_TITLE}}</title>
+<style>
+  /* ---- Brand tokens -------------------------------------------------
+     Placeholder values. Swap these for the real AIA brand hex codes /
+     logo (via the "AIA-digital-design" skill tokens, if available) when
+     producing client-facing output. Nothing else in this template needs
+     to change to re-brand it. */
+  :root{
+    --brand-primary:#7a1630;
+    --brand-primary-dark:#54101f;
+    --brand-accent:#c9a24b;
+    --brand-ink:#1c1c1c;
+    --brand-muted:#6b6b6b;
+    --brand-bg:#faf8f5;
+    --brand-card:#ffffff;
+    --brand-border:#e6e1da;
+    --risk:#b3261e;
+    --risk-bg:#fdecea;
+    --ok:#1e6b3c;
+    --ok-bg:#eaf6ee;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Segoe UI",Arial,Helvetica,sans-serif;
+    background:var(--brand-bg);
+    color:var(--brand-ink);
+    line-height:1.45;
+  }
+  header.report-header{
+    background:linear-gradient(135deg,var(--brand-primary),var(--brand-primary-dark));
+    color:#fff;
+    padding:28px 32px;
+  }
+  .brand-mark{
+    font-weight:700;
+    font-size:20px;
+    letter-spacing:.08em;
+  }
+  .brand-sub{
+    font-size:12px;
+    opacity:.85;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+  }
+  header.report-header h1{
+    margin:10px 0 16px;
+    font-size:26px;
+  }
+  dl.meta-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:8px 24px;
+    margin:0;
+  }
+  dl.meta-grid dt{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    opacity:.75;
+  }
+  dl.meta-grid dd{
+    margin:0;
+    font-size:14px;
+    font-weight:600;
+  }
+  main{max-width:1100px;margin:0 auto;padding:24px 32px 64px;}
+  section{margin-bottom:36px;}
+  section h2{
+    font-size:18px;
+    border-bottom:2px solid var(--brand-accent);
+    padding-bottom:6px;
+    margin-bottom:16px;
+  }
+  .summary-cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:16px;
+  }
+  .card{
+    background:var(--brand-card);
+    border:1px solid var(--brand-border);
+    border-radius:8px;
+    padding:16px;
+  }
+  .card-label{display:block;font-size:12px;color:var(--brand-muted);text-transform:uppercase;letter-spacing:.05em;}
+  .card-value{display:block;font-size:22px;font-weight:700;margin-top:6px;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--brand-card);
+    border:1px solid var(--brand-border);
+    border-radius:8px;
+    overflow:hidden;
+    font-size:13px;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 12px;
+    border-bottom:1px solid var(--brand-border);
+  }
+  th{
+    background:#f2eee7;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  th.sortable::after{content:" \\2195";opacity:.4;font-size:10px;}
+  tr:last-child td{border-bottom:none;}
+  .risk-row td{background:var(--risk-bg);}
+  .badge{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    font-size:11px;
+    font-weight:600;
+  }
+  .badge-risk{background:var(--risk-bg);color:var(--risk);}
+  .badge-ok{background:var(--ok-bg);color:var(--ok);}
+  .bar-chart{background:var(--brand-card);border:1px solid var(--brand-border);border-radius:8px;padding:16px;margin-top:12px;}
+  .bar-row{display:grid;grid-template-columns:160px 1fr 90px;align-items:center;gap:10px;margin-bottom:8px;font-size:13px;}
+  .bar-track{background:#f0ece4;border-radius:4px;height:14px;overflow:hidden;}
+  .bar-fill{background:var(--brand-primary);height:100%;}
+  a{color:var(--brand-primary);}
+  .source-link{font-size:12px;}
+  .exceptions li{margin-bottom:6px;}
+  footer{text-align:center;font-size:11px;color:var(--brand-muted);padding:24px;}
+  .pager{
+    display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    margin:10px 0 0;font-size:13px;color:var(--brand-muted);
+  }
+  .pager button{
+    border:1px solid var(--brand-border);background:var(--brand-card);
+    border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;
+  }
+  .pager button[disabled]{opacity:.45;cursor:default;}
+  .pager .pager-status{font-variant-numeric:tabular-nums;}
+</style>
+</head>
+<body>
+
+<header class="report-header">
+  <div class="brand-mark">AIA</div>
+  <div class="brand-sub">Loan Risk Assessment</div>
+  <h1>Bank Statement Analysis Report</h1>
+  <dl class="meta-grid">
+    <dt>Source file</dt><dd>{{SOURCE_FILE}}</dd>
+    <dt>Bank</dt><dd>{{BANK}}</dd>
+    <dt>Account</dt><dd>{{MASKED_ACCOUNT}}</dd>
+    <dt>Statement period</dt><dd>{{STATEMENT_PERIOD}}</dd>
+    <dt>Opening balance</dt><dd>{{OPENING_BALANCE}}</dd>
+    <dt>Closing balance</dt><dd>{{CLOSING_BALANCE}}</dd>
+    <dt>Generated</dt><dd>{{GENERATED_DATE}}</dd>
+  </dl>
+</header>
+
+<main>
+
+  <!-- 2. Summary cards -->
+  <section class="summary-cards">
+    <div class="card"><span class="card-label">Total Income</span><span class="card-value">{{TOTAL_INCOME}}</span></div>
+    <div class="card"><span class="card-label">Total Expenses</span><span class="card-value">{{TOTAL_EXPENSES}}</span></div>
+    <div class="card"><span class="card-label">Net Position</span><span class="card-value">{{NET_POSITION}}</span></div>
+    <div class="card"><span class="card-label">Essential vs Discretionary</span><span class="card-value">{{ESSENTIAL_SPLIT}}</span></div>
+    <div class="card"><span class="card-label">Risk Flags</span><span class="card-value">{{RISK_FLAG_COUNT}}</span></div>
+  </section>
+
+  <!-- 3. Category breakdown -->
+  <section class="category-breakdown">
+    <h2>Category Breakdown</h2>
+    <table>
+      <thead><tr><th>Category</th><th>Total</th><th>Monthly avg.</th><th>% of expenses</th></tr></thead>
+      <tbody>
+        <!-- REPEAT: one <tr> per category -->
+        <tr><td>{{CATEGORY}}</td><td>{{CATEGORY_TOTAL}}</td><td>{{CATEGORY_MONTHLY_AVG}}</td><td>{{CATEGORY_PERCENT}}%</td></tr>
+        <!-- END REPEAT -->
+      </tbody>
+    </table>
+    <div class="bar-chart">
+      <!-- REPEAT: one .bar-row per category, sorted largest first -->
+      <div class="bar-row">
+        <span>{{CATEGORY}}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:{{CATEGORY_PERCENT}}%"></div></div>
+        <span>{{CATEGORY_TOTAL}}</span>
+      </div>
+      <!-- END REPEAT -->
+    </div>
+  </section>
+
+  <!-- 4. Income analysis -->
+  <section class="income-analysis">
+    <h2>Income Analysis</h2>
+    <table>
+      <thead><tr><th>Source</th><th>Cadence</th><th>Average amount</th><th>Regularity</th></tr></thead>
+      <tbody>
+        <!-- REPEAT: one <tr> per distinct income source -->
+        <tr><td>{{INCOME_SOURCE}}</td><td>{{INCOME_CADENCE}}</td><td>{{INCOME_AVG_AMOUNT}}</td><td>{{INCOME_REGULARITY}}</td></tr>
+        <!-- END REPEAT -->
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 5. Recurring commitments -->
+  <section class="recurring-commitments">
+    <h2>Recurring Commitments</h2>
+    <table>
+      <thead><tr><th>Vendor</th><th>Category</th><th>Amount</th><th>Cadence</th><th>Essential</th></tr></thead>
+      <tbody>
+        <!-- REPEAT: one <tr> per recurring commitment (rent, loans, insurance, subscriptions, etc.) -->
+        <tr><td>{{VENDOR}}</td><td>{{CATEGORY}}</td><td>{{AMOUNT}}</td><td>{{CADENCE}}</td><td>{{ESSENTIAL_YN}}</td></tr>
+        <!-- END REPEAT -->
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 6. Risk flags -->
+  <section class="risk-flags">
+    <h2>Risk Flags</h2>
+    <table>
+      <thead><tr><th>Date</th><th>Narrative</th><th>Amount</th><th>Reason</th></tr></thead>
+      <tbody>
+        <!-- REPEAT: one .risk-row per flagged transaction -->
+        <tr class="risk-row"><td>{{DATE}}</td><td>{{NARRATIVE_RAW}}</td><td>{{AMOUNT}}</td><td><span class="badge badge-risk">{{RISK_REASON}}</span></td></tr>
+        <!-- END REPEAT -->
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 7. Needs manual categorisation -->
+  <section class="manual-review">
+    <h2>Needs Manual Categorisation</h2>
+    <table>
+      <thead><tr><th>Date</th><th>Narrative</th><th>Amount</th></tr></thead>
+      <tbody>
+        <!-- REPEAT: one <tr> per Other/Uncategorised transaction -->
+        <tr><td>{{DATE}}</td><td>{{NARRATIVE_RAW}}</td><td>{{AMOUNT}}</td></tr>
+        <!-- END REPEAT -->
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 8. Full transaction ledger -->
+  <section class="ledger">
+    <h2>Full Transaction Ledger</h2>
+    <table id="ledger-table">
+      <thead>
+        <tr>
+          <th class="sortable" onclick="sortTable(0)">Date</th>
+          <th class="sortable" onclick="sortTable(1)">Narrative</th>
+          <th class="sortable" onclick="sortTable(2)">Vendor</th>
+          <th class="sortable" onclick="sortTable(3)">Category</th>
+          <th class="sortable" onclick="sortTable(4)">Amount</th>
+          <th class="sortable" onclick="sortTable(5)">Confidence</th>
+          <th class="sortable" onclick="sortTable(6)">Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- REPEAT: one <tr> per transaction -->
+        <tr>
+          <td>{{DATE}}</td>
+          <td>{{NARRATIVE_RAW}}</td>
+          <td>{{VENDOR}}</td>
+          <td>{{CATEGORY}} / {{SUBCATEGORY}}</td>
+          <td>{{AMOUNT}}</td>
+          <td>{{CONFIDENCE}}</td>
+          <td class="source-link">{{SOURCE_CELL}}</td>
+        </tr>
+        <!-- END REPEAT -->
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 9. Exceptions -->
+  <section class="exceptions">
+    <h2>Exceptions</h2>
+    <ul>
+      <!-- REPEAT: one <li> per exception (unreadable rows, unresolved vendors, reconciliation failures) -->
+      <li>{{EXCEPTION_DESCRIPTION}}</li>
+      <!-- END REPEAT -->
+    </ul>
+  </section>
+
+</main>
+
+<footer>Generated by the NZ Bank Statement Categoriser skill · {{GENERATED_DATE}} · Confidential — internal use only</footer>
+
+<script>
+  // Simple client-side sort + paging. No external dependencies, so the
+  // report keeps working when opened directly from disk (file://).
+  var PAGE_SIZE = 20;
+
+  function sortTable(colIndex){
+    var table = document.getElementById('ledger-table');
+    var tbody = table.tBodies[0];
+    var rows = Array.prototype.slice.call(tbody.rows);
+    var asc = table.getAttribute('data-sort-col') != colIndex || table.getAttribute('data-sort-dir') === 'desc';
+    rows.sort(function(a, b){
+      var av = a.cells[colIndex].innerText.trim();
+      var bv = b.cells[colIndex].innerText.trim();
+      var an = parseFloat(av.replace(/[^0-9.-]/g, ''));
+      var bn = parseFloat(bv.replace(/[^0-9.-]/g, ''));
+      var cmp = (!isNaN(an) && !isNaN(bn)) ? (an - bn) : av.localeCompare(bv);
+      return asc ? cmp : -cmp;
+    });
+    rows.forEach(function(r){ tbody.appendChild(r); });
+    table.setAttribute('data-sort-col', colIndex);
+    table.setAttribute('data-sort-dir', asc ? 'asc' : 'desc');
+    showPage(tbody, 1);
+  }
+
+  function showPage(tbody, page){
+    var rows = Array.prototype.slice.call(tbody.rows);
+    var nav = tbody.parentNode && tbody.parentNode.nextElementSibling;
+    if (nav && (!nav.className || nav.className.indexOf('pager') === -1)) nav = null;
+    if (rows.length <= PAGE_SIZE) {
+      rows.forEach(function(r){ r.style.display = ''; });
+      if (nav) nav.parentNode.removeChild(nav);
+      return;
+    }
+    var pages = Math.ceil(rows.length / PAGE_SIZE);
+    page = Math.max(1, Math.min(page, pages));
+    tbody.setAttribute('data-page', String(page));
+    rows.forEach(function(r, i){
+      r.style.display = (i >= (page - 1) * PAGE_SIZE && i < page * PAGE_SIZE) ? '' : 'none';
+    });
+    if (!nav) {
+      nav = document.createElement('div');
+      nav.className = 'pager';
+      tbody.parentNode.parentNode.insertBefore(nav, tbody.parentNode.nextSibling);
+    }
+    nav.innerHTML = '';
+    var prev = document.createElement('button');
+    prev.type = 'button';
+    prev.textContent = 'Previous';
+    prev.disabled = page <= 1;
+    prev.onclick = function(){ showPage(tbody, page - 1); };
+    var next = document.createElement('button');
+    next.type = 'button';
+    next.textContent = 'Next';
+    next.disabled = page >= pages;
+    next.onclick = function(){ showPage(tbody, page + 1); };
+    var status = document.createElement('span');
+    status.className = 'pager-status';
+    var from = (page - 1) * PAGE_SIZE + 1;
+    var to = Math.min(page * PAGE_SIZE, rows.length);
+    status.textContent = from + '\u2013' + to + ' of ' + rows.length;
+    nav.appendChild(prev);
+    nav.appendChild(status);
+    nav.appendChild(next);
+  }
+
+  function paginateTables(){
+    var bodies = document.querySelectorAll('table tbody');
+    for (var i = 0; i < bodies.length; i++) showPage(bodies[i], 1);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', paginateTables);
+  } else {
+    paginateTables();
+  }
+</script>
+
+</body>
+</html>

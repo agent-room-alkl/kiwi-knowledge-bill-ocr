@@ -5,7 +5,10 @@
   "description": "Structured output for classifying extracted bank/credit-card transactions. The model assigns category, inclusion, and rationale only. Totals, frequency conversion, and statement-age math are computed in code.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["assessment_date", "classifications"],
+  "required": [
+    "assessment_date",
+    "classifications"
+  ],
   "properties": {
     "assessment_date": {
       "type": "string",
@@ -15,7 +18,9 @@
     "classifications": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/classification" }
+      "items": {
+        "$ref": "#/$defs/classification"
+      }
     }
   },
   "$defs": {
@@ -119,7 +124,9 @@
           "type": "string",
           "description": "Stable id from the extract/normalize layer. Must match a canonical row."
         },
-        "category": { "$ref": "#/$defs/category" },
+        "category": {
+          "$ref": "#/$defs/category"
+        },
         "include_in_living_expenses": {
           "type": "boolean",
           "description": "Must be false for exclusions, income, one_off, underwriter_manual, unclear."
@@ -135,10 +142,18 @@
           "maxLength": 400,
           "description": "Short assessor-readable rationale. No arithmetic."
         },
-        "suggested_frequency": { "$ref": "#/$defs/frequency" },
-        "insurance_type": { "$ref": "#/$defs/insurance_type" },
-        "utility_type": { "$ref": "#/$defs/utility_type" },
-        "income_type": { "$ref": "#/$defs/income_type" },
+        "suggested_frequency": {
+          "$ref": "#/$defs/frequency"
+        },
+        "insurance_type": {
+          "$ref": "#/$defs/insurance_type"
+        },
+        "utility_type": {
+          "$ref": "#/$defs/utility_type"
+        },
+        "income_type": {
+          "$ref": "#/$defs/income_type"
+        },
         "merchant_normalized": {
           "type": "string",
           "maxLength": 80,
@@ -146,31 +161,67 @@
         },
         "is_business": {
           "type": "string",
-          "enum": ["yes", "no", "review"],
+          "enum": [
+            "yes",
+            "no",
+            "review"
+          ],
           "description": "Whether this spend is for earning income or running a trade. The calc engine excludes from recommended living only when this is yes. Absent defaults to no. Not inferred from merchant names."
         },
         "business_reason": {
           "type": "string",
           "maxLength": 200,
           "description": "Short criterion (premises lease, advertising, trade software, wholesale stock, no other business signal). No brand list. No arithmetic."
+        },
+        "risk_flag": {
+          "$ref": "#/$defs/risk_flag"
         }
       },
       "allOf": [
         {
           "if": {
-            "properties": { "category": { "const": "insurance" } },
-            "required": ["category"]
+            "properties": {
+              "category": {
+                "const": "insurance"
+              }
+            },
+            "required": [
+              "category"
+            ]
           },
-          "then": { "required": ["insurance_type"] }
+          "then": {
+            "required": [
+              "insurance_type"
+            ]
+          }
         },
         {
           "if": {
-            "properties": { "category": { "const": "utilities" } },
-            "required": ["category"]
+            "properties": {
+              "category": {
+                "const": "utilities"
+              }
+            },
+            "required": [
+              "category"
+            ]
           },
-          "then": { "required": ["utility_type"] }
+          "then": {
+            "required": [
+              "utility_type"
+            ]
+          }
         }
       ]
+    },
+    "risk_flag": {
+      "type": "string",
+      "enum": [
+        "gambling",
+        "payday_high_cost_lending",
+        "bnpl_arrears"
+      ],
+      "description": "Merchant-nature risk only, and only what the narrative supports. Fees and large cash withdrawals are detected in code from the statement text and must NOT be reported here. Omit when none applies - a guess is worse than silence, because the engine renders this to an underwriter as a flagged transaction."
     }
   }
 }

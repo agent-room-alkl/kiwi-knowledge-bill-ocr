@@ -70,7 +70,26 @@ Each entry:
 merchant (verbatim) | category | include_in_living_expenses | confidence
 reason (no arithmetic) | suggested_frequency | is_business | business_reason
 insurance_type if insurance | utility_type if utilities | income_type if income
+risk_flag only if the merchant is one of the three named below
 ```
+
+**`risk_flag`** is optional and answers one question: what kind of business
+is this merchant. Exactly three values, nothing else:
+
+- `gambling` - casino, TAB, pokies, betting site
+- `payday_high_cost_lending` - payday lender, truck-shop style high-cost credit
+- `bnpl_arrears` - a buy-now-pay-later *late or default* charge, not an
+  ordinary BNPL instalment
+
+**Do not use it for fees or cash.** Dishonour, overdraft and late-payment
+fees, and cash withdrawals over $500, are found in code by reading the
+statement text - the engine already flags them, and a second opinion from
+you would double-count them on the report.
+
+**Omit it when none applies.** This is not a field to fill in for
+completeness: every value you set is rendered to a loan underwriter as a
+flagged transaction against a real applicant. Silence costs nothing, a
+guess costs someone their mortgage.
 
 Use `transaction_id` instead of `merchant` only when one row truly differs
 from the rest of that merchant. Never invent ids. Schema has
@@ -82,6 +101,12 @@ A merchant you skip becomes a join-miss: the engine shows those rows unclear
 with no model reason, and `audit.join_miss_rows` counts them. Prefer
 `unclear` plus a reason over dropping an entry. **C9** reads that count, not
 the length of your classifications array.
+
+**On each C9 repair pass, every remaining join-miss merchant must receive
+a classification entry.** Even if confidence is low, provide `unclear` with
+a reason rather than omitting the entry. An omitted merchant stays
+unclassified forever; `unclear` is a valid classification that documents
+what information is missing.
 
 **Classify inflows too.** Salary / employer payroll → `salary_wages`;
 WINZ/WFF → `benefit`; rent received → `rental_income`. Own-account moves →
@@ -106,6 +131,7 @@ put it in recommended living.
 
 Person-name **outflows** in that food-trade pattern are business
 COGS/payouts: `is_business` yes, include false, not household grocery.
+Person-name outflows outside that food-trade pattern are not auto-forced to is_business; classify normally (household / transfer / unclear as warranted) so living expenses are not understated.
 
 Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering
 channel) → `is_business` yes, include false, `wholesale stock / COGS`.
@@ -199,6 +225,19 @@ worked out**. The server keeps what you sent before and merges; resending the
 whole set is what exhausts your context window. `classification_store` in the
 response tells you what it now holds.
 
+**`audit.unclassified_merchants` is the list to work from.** The response no
+longer carries `part2` - the full ledger is too big for the tool channel, so
+it is kept on `summary_id` for the renderer instead. That leaves
+`join_miss_rows` as a bare count, and a count is not something you can
+repair. `audit.unclassified_merchants` is that same set keyed by merchant:
+each entry gives `merchant`, `direction`, how many `rows` it covers, and an
+`example` descriptor when the normalised name dropped something. Classify
+those merchants. **`direction` decides the answer** - an unclassified
+*inflow* under a person's name is side-business takings
+(`business_receipts`), while the same name on an *outflow* is not. If
+`unclassified_merchants_truncated` is true the list was capped; repair what
+it gives you and call again, the next response names the rest.
+
 Repeat that while `audit.join_miss_rows` is falling, up to three passes. When
 rows remain unresolved, **render anyway** and say so in the closing summary:
 how many rows, and that they are excluded from every total. Stopping at C9
@@ -279,8 +318,8 @@ Mapping (generic):
   `recreation_entertainment` (not transport, not grocery)
 - supermarket / grocery / butcher / essential clothing →
   `food_grocery_clothing_personal_care`
-- Netflix / Spotify / gym / iCloud / set-and-forget apps →
-  `monthly_subscriptions`
+- Netflix / Spotify / gym / iCloud / Amazon Prime / Amazon Prime Video /
+  set-and-forget apps → `monthly_subscriptions`
 - power / water / gas / broadband / mobile → `utilities` + `utility_type`
 - insurance premium → `insurance` + `insurance_type`
 - KiwiSaver / savings / Sharesies → `kiwisaver_savings_investments`,

@@ -20,3 +20,13 @@ fixtures/samples/
 *.xlsx
 *.png
 out/
+
+# Merchant memory is seeded from a real applicant's statement: 76 person-name
+# keys and 94 business_receipts entries with their original descriptors. This
+# repo is public, so the file ships to Azure via `func azure functionapp
+# publish` and is deliberately not committed. See specs/ for how to rebuild it
+# with pipeline/build_merchant_memory.py from an accepted run.
+function_app/merchant_memory.json
+
+# Material received from Vikas, not ours to publish in a public repo.
+from vikas/

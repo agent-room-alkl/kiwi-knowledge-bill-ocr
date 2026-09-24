@@ -26,6 +26,7 @@ from extract_normalize import (  # noqa: E402
     publish_report as _publish_report,
     store_batch as _store_batch,
 )
+from render_html import build_report_artifacts  # noqa: E402
 from render_report import build_workbook  # noqa: E402
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
@@ -138,7 +139,27 @@ def extract_and_normalize(req: func.HttpRequest) -> func.HttpResponse:
     return _ok(batch)
 
 
-def _check_not_truncated(canonical: dict, classifications: dict) -> None:
+def _as_classification_payload(raw):
+    """Foundry sometimes posts the array, not the wrapper object.
+
+    OpenAPI documents `{assessment_date, classifications:[...]}`. The Chat
+    agent still sends a bare list. Left as-is, the next `.get` raises
+    `'list' object has no attribute 'get'` and the underwriter sees a 400
+    instead of a report.
+    """
+    if raw is None:
+        return {}
+    if isinstance(raw, list):
+        return {"classifications": raw}
+    if isinstance(raw, dict):
+        return raw
+    raise ValueError(
+        "classifications must be an object {assessment_date, classifications:[...]} "
+        f"or a list of entries, not {type(raw).__name__}"
+    )
+
+
+def _check_not_truncated(canonical: dict, classifications) -> None:
     """Reject a payload that arrived cut in half, and say so in those words.
 
     A truncated array shows up as a trailing `null` or a row with no
@@ -157,6 +178,7 @@ def _check_not_truncated(canonical: dict, classifications: dict) -> None:
                     "it returns instead of canonical."
                 )
 
+    classifications = _as_classification_payload(classifications)
     items = classifications.get("classifications")
     if isinstance(items, list):
         for i, item in enumerate(items):
@@ -174,6 +196,31 @@ def _check_not_truncated(canonical: dict, classifications: dict) -> None:
                 )
 
 
+def _slim_summary_for_http(summary: dict, body: dict) -> dict:
+    """Drop row arrays Foundry cannot ingest. Full payload stays on summary_id."""
+    if body.get("include_full_summary"):
+        return summary
+    arrays = (
+        ("report_view", "include_report_view", "report_view_omitted", None),
+        ("part2", "include_part2", "part2_omitted", "part2_row_count"),
+        ("part3", "include_part3", "part3_omitted", "part3_row_count"),
+        (
+            "part2_calculations",
+            "include_part2_calculations",
+            "part2_calculations_omitted",
+            "part2_calculations_row_count",
+        ),
+    )
+    for key, flag, omitted, count_key in arrays:
+        if body.get(flag):
+            continue
+        value = summary.pop(key, None)
+        summary[omitted] = True
+        if count_key:
+            summary[count_key] = len(value) if isinstance(value, list) else 0
+    return summary
+
+
 @app.route(route="compute_summary", methods=["POST"])
 def compute_summary_http(req: func.HttpRequest) -> func.HttpResponse:
     """Totals from a canonical batch plus the model's classifications.
@@ -185,7 +232,7 @@ def compute_summary_http(req: func.HttpRequest) -> func.HttpResponse:
     """
     try:
         body = _json(req)
-        classifications = body.get("classifications") or {}
+        classifications = _as_classification_payload(body.get("classifications"))
         batch_id = body.get("batch_id")
         # Repair passes send only what they just classified. Without this the
         # agent has to resend all 238 merchants every time, which is what ran
@@ -227,6 +274,11 @@ def compute_summary_http(req: func.HttpRequest) -> func.HttpResponse:
         except Exception as exc:  # noqa: BLE001
             summary["summary_id"] = None
             summary["summary_store_error"] = str(exc)
+        # Store FIRST so render_report still has the full ledger + report_view.
+        # Then drop the row arrays Foundry cannot ingest (report_view, part2,
+        # part3, part2_calculations). Scripts pass include_full_summary or the
+        # individual include_* flags.
+        _slim_summary_for_http(summary, body)
         return _ok(summary)
     except BatchNotFound as exc:
         return _err(str(exc), status=404)
@@ -260,9 +312,26 @@ def _xlsx_base64(summary: dict, applicant: dict | None = None) -> str:
     return base64.b64encode(build_workbook(summary, applicant)).decode("ascii")
 
 
+def _publish_artifact(artifact: dict, include_base64: bool) -> dict:
+    published = _publish_report(
+        artifact["content"],
+        artifact["filename"],
+        content_type=artifact["content_type"],
+    )
+    published["status"] = "ok"
+    published["format"] = artifact["kind"]
+    if include_base64:
+        key = "xlsx_base64" if artifact["kind"] == "xlsx" else "html_base64"
+        published[key] = base64.b64encode(artifact["content"]).decode()
+    return published
+
+
 @app.route(route="render_report", methods=["POST"])
 def render_report(req: func.HttpRequest) -> func.HttpResponse:
-    """Write lender-assessment.xlsx and return a link the caller can hand over.
+    """Write the lender report and return a link the caller can hand over.
+
+    `format` is xlsx (default, existing callers), html, or both. Top-level
+    `download_url` stays the workbook when format is xlsx or both.
 
     Returns `download_url` by default. `include_base64: true` additionally
     returns the bytes, for scripts that want them in-process - an agent should
@@ -277,28 +346,47 @@ def render_report(req: func.HttpRequest) -> func.HttpResponse:
         else:
             summary = body.get("summary") or {}
             _check_summary_intact(summary)
-        content = base64.b64decode(_xlsx_base64(summary, body.get("applicant")))
-        filename = body.get("filename") or "lender-assessment.xlsx"
+        fmt = body.get("format") or "xlsx"
+        artifacts = build_report_artifacts(
+            summary, body.get("applicant"), fmt, body.get("filename")
+        )
 
-        try:
-            published = _publish_report(content, filename)
-        except ExtractionError as exc:
-            # No storage configured: say so plainly rather than pretending the
-            # workbook was delivered.
-            return _ok(
+        published_list = []
+        include_base64 = bool(body.get("include_base64"))
+        for artifact in artifacts:
+            try:
+                published_list.append(_publish_artifact(artifact, include_base64))
+            except ExtractionError as exc:
+                first = artifacts[0]
+                return _ok(
+                    {
+                        "filename": first["filename"],
+                        "download_url": None,
+                        "status": "not_published",
+                        "message": f"report rendered but could not be published: {exc}",
+                        "size_bytes": len(first["content"]),
+                        "format": first["kind"],
+                    },
+                    status=200,
+                )
+
+        if fmt == "both":
+            by_kind = {item["format"]: item for item in published_list}
+            xlsx = by_kind["xlsx"]
+            html = by_kind["html"]
+            payload = dict(xlsx)
+            payload.update(
                 {
-                    "filename": filename,
-                    "download_url": None,
-                    "status": "not_published",
-                    "message": f"workbook rendered but could not be published: {exc}",
-                    "size_bytes": len(content),
-                },
-                status=200,
+                    "html_filename": html["filename"],
+                    "html_download_url": html["download_url"],
+                    "html_expires_at": html.get("expires_at"),
+                    "html_size_bytes": html["size_bytes"],
+                    "formats": ["xlsx", "html"],
+                }
             )
-
-        published["status"] = "ok"
-        if body.get("include_base64"):
-            published["xlsx_base64"] = base64.b64encode(content).decode()
-        return _ok(published)
+            if include_base64 and "html_base64" in html:
+                payload["html_base64"] = html["html_base64"]
+            return _ok(payload)
+        return _ok(published_list[0])
     except Exception as exc:
         return _err(str(exc), status=400)

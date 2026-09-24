@@ -297,6 +297,28 @@ _MERCHANT_ALIASES = (
 )
 
 
+def vendor_provenance(merchant: str, description: str = "") -> tuple[str, None]:
+    """Where a merchant name came from, for the report's Source column.
+
+    The column is an audit trail, so it may only claim what actually
+    happened. `_MERCHANT_ALIASES` is a real pattern library - a hit there
+    means a maintained rule recognised this descriptor, which is `pattern`.
+    Anything else got here by stripping bank furniture off the raw text,
+    which identifies nobody, so it stays `unresolved` rather than borrowing
+    credibility it has not earned.
+
+    The URL is always None while we are offline. `companies_office`, `nzbn`
+    and `web` stay in the schema's enum unused until someone decides that
+    merchant tokens may leave the machine; the field is here so turning that
+    on later adds a lookup rather than reshaping the contract.
+    """
+    blob = f"{merchant or ''} {description or ''}".upper()
+    for pat, _canon in _MERCHANT_ALIASES:
+        if pat.search(blob):
+            return "pattern", None
+    return "unresolved", None
+
+
 def descriptor_core(description: str) -> str:
     """Bank prefix/suffix stripped. Used to spot the same charge extracted twice."""
     s = str(description or "").upper().strip()
@@ -338,6 +360,16 @@ def normalize_merchant(description: str) -> str:
         " ",
         s,
     )
+    # Sweep up what the digit and suburb rules leave behind. `ATM W/D Wairau
+    # Park A-20:49` loses `20`, `49` and `WAIRAU` above and would otherwise
+    # reach the report as `ATM W/D PARK A- :` - punctuation still pointing at
+    # a timestamp that is no longer there. The underwriter cannot tell which
+    # shop that was. Drop separators with nothing left on either side, then
+    # any dangling one-character fragment of the stripped token.
+    s = re.sub(r"[-:/]+(?=\s|$)", " ", s)
+    s = re.sub(r"(?<=\s)[-:/]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip(" -:/")
+    s = re.sub(r"\s+\w(?=\s|$)", "", s) if re.search(r"\s\w$", s) else s
     s = re.sub(r"\s+", " ", s).strip()
     s = _TRAILING_INDICATOR_RE.sub("", s).strip()
     for pat, canon in _MERCHANT_ALIASES:
@@ -1406,8 +1438,24 @@ def _document_index(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 REPORTS_CONTAINER = os.environ.get("REPORTS_CONTAINER", "vikas-reports")
 
 
-def publish_report(content: bytes, filename: str, hours_valid: int = 24) -> dict[str, Any]:
-    """Put the rendered workbook somewhere the user can click, and return a link.
+def _report_content_type(filename: str, content_type: str | None = None) -> str:
+    if content_type:
+        return content_type
+    lower = filename.lower()
+    if lower.endswith(".html"):
+        return "text/html; charset=utf-8"
+    if lower.endswith(".xlsx"):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return "application/octet-stream"
+
+
+def publish_report(
+    content: bytes,
+    filename: str,
+    hours_valid: int = 24,
+    content_type: str | None = None,
+) -> dict[str, Any]:
+    """Put the rendered report somewhere the user can click, and return a link.
 
     Handing the caller a base64 blob does not deliver a file. An agent has no
     way to write bytes to disk, so it reports "Attached: lender-assessment.xlsx"
@@ -1440,7 +1488,7 @@ def publish_report(content: bytes, filename: str, hours_valid: int = 24) -> dict
         data=content,
         overwrite=True,
         content_settings=ContentSettings(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            content_type=_report_content_type(filename, content_type)
         ),
     )
 
