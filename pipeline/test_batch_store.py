@@ -135,14 +135,22 @@ print("\n== truncation diagnostics ==")
 sys.path.insert(0, str(ROOT))
 
 
-def _check_not_truncated(canonical, classifications):
-    """Mirror of the route helper, imported without azure.functions present."""
+def _http_helpers():
+    """Mirror of the route helpers, imported without azure.functions present."""
     src = (ROOT / "function_app" / "function_app.py").read_text()
-    start = src.index("def _check_not_truncated")
+    start = src.index("def _as_classification_payload")
     end = src.index('@app.route(route="compute_summary"')
     ns: dict = {}
     exec(compile(src[start:end], "function_app.py", "exec"), ns)  # noqa: S102
-    return ns["_check_not_truncated"](canonical, classifications)
+    return ns
+
+
+def _check_not_truncated(canonical, classifications):
+    return _http_helpers()["_check_not_truncated"](canonical, classifications)
+
+
+def _as_classification_payload(raw):
+    return _http_helpers()["_as_classification_payload"](raw)
 
 
 good_canon = {"transactions": [{"transaction_id": "a1"}, {"transaction_id": "a2"}]}
@@ -190,6 +198,39 @@ try:
     check("a merchant-keyed classification is accepted", True)
 except Exception as exc:  # noqa: BLE001
     check("a merchant-keyed classification is accepted", False, exc)
+
+# Robin's Chat 400: Foundry posted the array, not {classifications:[...]}.
+# The next .get used to raise "'list' object has no attribute 'get'".
+wrapped = _as_classification_payload(
+    [{"merchant": "ATOM DATA NZ LIMITED", "category": "salary_wages"}]
+)
+check(
+    "a bare list becomes the documented object",
+    wrapped == {
+        "classifications": [
+            {"merchant": "ATOM DATA NZ LIMITED", "category": "salary_wages"}
+        ]
+    },
+    wrapped,
+)
+check(
+    "an object is left alone",
+    _as_classification_payload(good_cls) == good_cls,
+)
+check("None becomes empty object", _as_classification_payload(None) == {})
+try:
+    _check_not_truncated(
+        good_canon,
+        [{"merchant": "ATOM DATA NZ LIMITED", "category": "salary_wages"}],
+    )
+    check("truncation guard accepts a bare list", True)
+except Exception as exc:  # noqa: BLE001
+    check("truncation guard accepts a bare list", False, exc)
+raises(
+    "null inside a bare list is still called truncation",
+    lambda: _check_not_truncated(good_canon, [None]),
+    "truncated in transit",
+)
 
 
 
@@ -298,6 +339,109 @@ raises(
     lambda: _check_summary_intact({"part2_calculations": [{"merchant": "X"}, "..."]}),
     "abbreviated instead of sent whole",
 )
+
+print()
+print("== incremental classifications: a retry sends only what is new ==")
+
+bid = E.validate_batch_id("68b6a1f0T0c3d5e-9f2c4a7b1d8e0f36")
+
+first = [
+    {"merchant": "PAK N SAVE W", "category": "food_grocery_clothing_personal_care"},
+    {"merchant": "BARFOOT & THOMPSON", "category": "rent_board_paid"},
+]
+merged, stats = E.merge_classifications(bid, first)
+check("first pass stores what it was sent", len(merged) == 2, stats)
+check("nothing was known before", stats["known_before"] == 0, stats)
+
+# The repair pass sends ONE merchant, not the two it already decided.
+second = [{"merchant": "AUCKLAND TRANSPORT", "category": "transport"}]
+merged, stats = E.merge_classifications(bid, second)
+check(
+    "a one-entry retry still yields the full set",
+    len(merged) == 3 and stats["sent_this_call"] == 1,
+    stats,
+)
+check("the earlier entries were retained", stats["known_before"] == 2, stats)
+check("the new entry is counted as added", stats["added"] == 1 and stats["replaced"] == 0, stats)
+by_merchant = {r.get("merchant"): r for r in merged}
+check(
+    "all three merchants present after a partial resend",
+    set(by_merchant) == {"PAK N SAVE W", "BARFOOT & THOMPSON", "AUCKLAND TRANSPORT"},
+    sorted(by_merchant),
+)
+
+# A correction is a resend of that one entry: last write wins, deterministically.
+merged, stats = E.merge_classifications(
+    bid, [{"merchant": "AUCKLAND TRANSPORT", "category": "underwriter_manual"}]
+)
+by_merchant = {r.get("merchant"): r for r in merged}
+check(
+    "resending an entry replaces it rather than duplicating",
+    len(merged) == 3 and by_merchant["AUCKLAND TRANSPORT"]["category"] == "underwriter_manual",
+    stats,
+)
+check("the replacement is counted as replaced", stats["replaced"] == 1 and stats["added"] == 0, stats)
+
+# Merchant-level and per-row decisions are different keys, so a row-level
+# correction can sit alongside the merchant rule it overrides.
+merged, _ = E.merge_classifications(bid, [{"transaction_id": "t7", "category": "one_off"}])
+check("a transaction_id entry does not collide with a merchant entry", len(merged) == 4)
+
+# A merchant-less, id-less row is not a decision about anything.
+merged, stats = E.merge_classifications(bid, [{"category": "transport"}])
+check("an entry naming neither merchant nor transaction is dropped", stats["added"] == 0, stats)
+
+E.merge_classifications(bid, [])
+merged, stats = E.merge_classifications(bid, [])
+check("an empty retry changes nothing", len(merged) == 4 and stats["total"] == 4, stats)
+
+other = E.validate_batch_id("68b6a1f0T0c3d5e-9f2c4a7b1d8e0f37")
+merged, stats = E.merge_classifications(other, [{"merchant": "X", "category": "transport"}])
+check("a different batch starts empty", stats["known_before"] == 0 and len(merged) == 1, stats)
+
+print("\n== Chat HTTP slim drops part2 and report_view, keeps counts ==")
+
+
+def _slim_summary_for_http(summary, body):
+    src = (ROOT / "function_app" / "function_app.py").read_text()
+    start = src.index("def _slim_summary_for_http")
+    end = src.index("@app.route(route=\"compute_summary\"")
+    ns: dict = {}
+    exec(compile(src[start:end], "function_app.py", "exec"), ns)  # noqa: S102
+    return ns["_slim_summary_for_http"](summary, body)
+
+
+fat = {
+    "summary_id": "s1",
+    "part1": [{"category": "rent_board_paid"}],
+    "part2": [{"date": "2026-06-01", "description": "X"} for _ in range(611)],
+    "part2_calculations": [{"merchant": "X"} for _ in range(238)],
+    "part3": [{"date": "2026-06-02", "description": "one off"} for _ in range(80)],
+    "report_view": {"ledger": [{"transaction_id": "t"} for _ in range(611)]},
+    "recommended_monthly_living": 1.0,
+}
+slim = _slim_summary_for_http(dict(fat), {})
+check("default drops part2", "part2" not in slim)
+check("default drops report_view", "report_view" not in slim)
+check("default drops part3", "part3" not in slim)
+check("default drops part2_calculations", "part2_calculations" not in slim)
+check("default sets part2_omitted", slim.get("part2_omitted") is True)
+check("default counts 611 part2 rows", slim.get("part2_row_count") == 611, slim.get("part2_row_count"))
+check("default counts 80 part3 rows", slim.get("part3_row_count") == 80, slim.get("part3_row_count"))
+check("default counts 238 calc rows", slim.get("part2_calculations_row_count") == 238)
+check("default sets report_view_omitted", slim.get("report_view_omitted") is True)
+check("default keeps part1 and summary_id", slim.get("part1") == fat["part1"] and slim.get("summary_id") == "s1")
+
+kept = _slim_summary_for_http(
+    dict(fat),
+    {"include_part2": True, "include_report_view": True, "include_part3": True, "include_part2_calculations": True},
+)
+check("scripts can keep part2", isinstance(kept.get("part2"), list) and len(kept["part2"]) == 611)
+check("scripts can keep report_view", "ledger" in (kept.get("report_view") or {}))
+check("scripts can keep part3", isinstance(kept.get("part3"), list) and len(kept["part3"]) == 80)
+check("opt-in does not set omit flags", "part2_omitted" not in kept and "report_view_omitted" not in kept)
+full = _slim_summary_for_http(dict(fat), {"include_full_summary": True})
+check("include_full_summary keeps every array", "part2" in full and "part3" in full and "report_view" in full)
 
 print()
 if FAILURES:

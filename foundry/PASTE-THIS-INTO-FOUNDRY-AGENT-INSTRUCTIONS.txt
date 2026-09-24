@@ -70,16 +70,105 @@ Each entry:
 merchant (verbatim) | category | include_in_living_expenses | confidence
 reason (no arithmetic) | suggested_frequency | is_business | business_reason
 insurance_type if insurance | utility_type if utilities | income_type if income
+risk_flag only if the merchant is one of the three named below
 ```
+
+**`risk_flag`** is optional and answers one question: what kind of business
+is this merchant. Exactly three values, nothing else:
+
+- `gambling` - casino, TAB, pokies, betting site
+- `payday_high_cost_lending` - payday lender, truck-shop style high-cost credit
+- `bnpl_arrears` - a buy-now-pay-later *late or default* charge, not an
+  ordinary BNPL instalment
+
+**Do not use it for fees or cash.** Dishonour, overdraft and late-payment
+fees, and cash withdrawals over $500, are found in code by reading the
+statement text - the engine already flags them, and a second opinion from
+you would double-count them on the report.
+
+**Omit it when none applies.** This is not a field to fill in for
+completeness: every value you set is rendered to a loan underwriter as a
+flagged transaction against a real applicant. Silence costs nothing, a
+guess costs someone their mortgage.
 
 Use `transaction_id` instead of `merchant` only when one row truly differs
 from the rest of that merchant. Never invent ids. Schema has
 `additionalProperties: false` and no amount field — do not restate amounts.
 
-**Classify inflows too.** Salary → `salary_wages`; WINZ/WFF → `benefit`;
-rent received → `rental_income`. Unclassified inflows become `unclear` and
-income disappears. Own-account moves → `internal_transfer`; card refunds →
-`reimbursement`.
+**Every worklist entry must be classified.** Classify by merchant - one
+entry covers all that merchant's rows - and leave nothing on the list.
+A merchant you skip becomes a join-miss: the engine shows those rows unclear
+with no model reason, and `audit.join_miss_rows` counts them. Prefer
+`unclear` plus a reason over dropping an entry. **C9** reads that count, not
+the length of your classifications array.
+
+**On each C9 repair pass, every remaining join-miss merchant must receive
+a classification entry.** Even if confidence is low, provide `unclear` with
+a reason rather than omitting the entry. An omitted merchant stays
+unclassified forever; `unclear` is a valid classification that documents
+what information is missing.
+
+**Classify inflows too.** Salary / employer payroll → `salary_wages`;
+WINZ/WFF → `benefit`; rent received → `rental_income`. Own-account moves →
+`internal_transfer`; card refunds → `reimbursement`.
+
+**Side business vs salary.** Repeated small inflows from many personal
+names — especially bun / pork bun / egg / food-sale notes — are **gross
+side-business receipts**, not wages and **not assessable income**:
+- category `business_receipts`
+- `include_in_living_expenses` false
+- `is_business` yes
+- reason `side-business gross receipts, not net profit`
+**Never `unclear`.** `unclear` means the file could not tell; this is the
+opposite — a row you identified. Filing known takings as unknown made 150
+rows read as unclassified and hid the business.
+**Never `other_income` or `salary_wages`.** The engine puts income
+categories in Part 1.4 and monthlyises each payer on its own window, which
+turns turnover into income and inflates it. `business_receipts` is reported
+in its own Part 1.4 line marked GROSS and left out of
+`audit.assessable_income_monthly`. Do not treat the sum as net profit or
+put it in recommended living.
+
+Person-name **outflows** in that food-trade pattern are business
+COGS/payouts: `is_business` yes, include false, not household grocery.
+Person-name outflows outside that food-trade pattern are not auto-forced to is_business; classify normally (household / transfer / unclear as warranted) so living expenses are not understated.
+
+Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering
+channel) → `is_business` yes, include false, `wholesale stock / COGS`.
+If bun/egg sales also appear, do not leave these as `review`.
+
+Workspace lease, advertising, trade payment-processor fees, and
+professional/trade software → `is_business` yes, include false. **Name the
+processors:** GoCardless, Stripe, Square, PayPal *merchant* fees are trade
+processor charges, not household spending — a fixed amount repeating on the
+same day each month is a trade subscription, so do not leave it `unclear`
+because the payee is a processor rather than a shop.
+
+**Cash out is living expense, not unknown spend.** `ATM W/D`, `POS W/D` with
+no merchant, over-the-counter withdrawals: the statement cannot say what the
+cash bought, and that is exactly why it must be counted. Classify as
+`food_grocery_clothing_personal_care` (or `other` if the file gives a better
+steer), `include_in_living_expenses` **true**, reason `cash withdrawal -
+purpose not printed, counted as living expense`. Leaving it `unclear` drops
+it out of every total and makes the applicant look cheaper to run than they
+are; a lender reads unexplained cash as spending until shown otherwise.
+
+**A descriptor that genuinely names nothing stays `unclear`** with a reason
+that says what is missing — a truncated shop name, a bare PayPal reference, a
+company whose trade you cannot tell. Three honest `unclear` rows are worth
+more than thirty guesses.
+
+**A conversion-rate line IS a purchase — classify it by its merchant.**
+`POS W/D 23.00USD @ 0.5922 conversion rate OPENAI OPENAI.COM CA` is an
+OpenAI charge that happened to be billed in USD. The extractor now lifts the
+merchant off the international-transaction-fee row beneath it, so the name is
+in the description. Treat it exactly as you would the same merchant billed in
+NZD — SaaS to `monthly_subscriptions` or `is_business` yes, as the merchant
+warrants. Do NOT fall back to `unclear` because the text contains an exchange
+rate.
+Only a conversion line with **no merchant name at all** stays `unclear`,
+include false, reason `foreign currency conversion line item, merchant not
+printed`. On this binder that is refunds, not purchases.
 
 `suggested_frequency` is a descriptor hint only (`WEEKLY` in the text, known
 monthly subscription). The engine measures date gaps and wins.
@@ -117,20 +206,71 @@ If `status` is `not_published`, report that; do not claim delivery.
 
 ## 2. Gate 2 — before render (from compute_summary JSON only)
 
-Any FAIL → do not render; report `SELFCHECK_FAILED` with the C-numbers.
+Any FAIL → do not render.
+
+**C8 is repairable, and repairing it is your job, not the reader's.**
+Classify the inflows it names and call `compute_summary` again, once. Then
+continue.
+
+**C9 does not stop the render.** Unclassified rows are reported, not fatal:
+the engine already shows them as `unclear` with reason `no classification
+joined`, counts them in `audit.join_miss_rows`, and splits them out in
+Part 5 "Unclear sources". A workbook that says "145 of 611 rows carry no
+classification" is worth more to an underwriter than no workbook at all.
+
+So: make a repair pass at C9 - classify the merchants it names (`unclear`
+with a reason is a valid answer, a guess is not) and call `compute_summary`
+again with **`merge_classifications: true`** and **only the entries you just
+worked out**. The server keeps what you sent before and merges; resending the
+whole set is what exhausts your context window. `classification_store` in the
+response tells you what it now holds.
+
+**`audit.unclassified_merchants` is the list to work from.** The response no
+longer carries `part2` - the full ledger is too big for the tool channel, so
+it is kept on `summary_id` for the renderer instead. That leaves
+`join_miss_rows` as a bare count, and a count is not something you can
+repair. `audit.unclassified_merchants` is that same set keyed by merchant:
+each entry gives `merchant`, `direction`, how many `rows` it covers, and an
+`example` descriptor when the normalised name dropped something. Classify
+those merchants. **`direction` decides the answer** - an unclassified
+*inflow* under a person's name is side-business takings
+(`business_receipts`), while the same name on an *outflow* is not. If
+`unclassified_merchants_truncated` is true the list was capped; repair what
+it gives you and call again, the next response names the rest.
+
+Repeat that while `audit.join_miss_rows` is falling, up to three passes. When
+rows remain unresolved, **render anyway** and say so in the closing summary:
+how many rows, and that they are excluded from every total. Stopping at C9
+with a list and no workbook is a refusal to finish the work.
+
+Report `SELFCHECK_FAILED` with the C-numbers when a check is not repairable,
+or when three repair passes have not cleared C8/C9 — then say what you tried
+and what is still unresolved.
 
 - C1 `part2` empty, or length ≠ non-info canonical transactions
 - C2 every Part 1 `monthly_equivalent` is 0, or recommended living is 0
   while part2 has outflows
 - C3 any part2 description is opening/closing/brought/carried forward
 - C4 amount equals that row's balance on >3 rows **and** >5% of rows
-- C5 only if total income > 0: one living line > income, or recommended
-  living > income × 3; if no income, skip with a WARN (C8 covers it)
+- C5 only if assessable income > 0: one living line > that income, or
+  recommended living > it × 3; if none, skip with a WARN (C8 covers it).
+  Use `audit.assessable_income_monthly`, never the raw income total — that
+  total includes side-business turnover, which is not assessable income
 - C6 rent exists in part2 but Part 1 Rent is 0
 - C7 POSREJ/DECLINED/REVERSED/NSF/DISHONOUR still has a non-zero amount
-- C8 `income` empty while part2 has inflows → go back to step 2, classify
-  inflows, re-run compute — do not render
-- C9 classification count ≠ canonical transaction count
+- C8 no *assessable* income while part2 has inflows → go back to step 2,
+  classify inflows, re-run compute — do not render. Ignore income rows of
+  type `side_business_gross_not_assessable` when judging empty: that row is
+  gross turnover the engine reports for visibility, and a binder whose
+  salary went unclassified would otherwise pass C8 on turnover alone.
+  `audit.assessable_income_monthly == 0` is the check
+- C9 `audit.join_miss_rows` > 0 → WARN, one repair pass, then still render.
+  Do NOT compare the length of `classifications` against the transaction
+  count: one merchant entry covers every row of that merchant, so 238
+  merchant entries legitimately classify 611 rows and that comparison fails
+  a correct run every time. Report the count in the six-line summary. Never
+  treat C9 as SELFCHECK_FAILED — like C10, it describes a file that needs
+  review, not a file that cannot be rendered
 - C10 >15% unclear → WARN only, still render. Report the count in the
   six-line summary. Do not treat C10 as SELFCHECK_FAILED.
 - C11 `part4` field absent (empty array OK only with no-liability status)
@@ -178,8 +318,8 @@ Mapping (generic):
   `recreation_entertainment` (not transport, not grocery)
 - supermarket / grocery / butcher / essential clothing →
   `food_grocery_clothing_personal_care`
-- Netflix / Spotify / gym / iCloud / set-and-forget apps →
-  `monthly_subscriptions`
+- Netflix / Spotify / gym / iCloud / Amazon Prime / Amazon Prime Video /
+  set-and-forget apps → `monthly_subscriptions`
 - power / water / gas / broadband / mobile → `utilities` + `utility_type`
 - insurance premium → `insurance` + `insurance_type`
 - KiwiSaver / savings / Sharesies → `kiwisaver_savings_investments`,

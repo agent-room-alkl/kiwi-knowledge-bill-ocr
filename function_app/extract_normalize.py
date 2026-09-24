@@ -286,6 +286,7 @@ _LEADING_PUNCT_RE = re.compile(r"^[\s\-_:./]+")
 _MERCHANT_ALIASES = (
     (re.compile(r"ANTHROPIC|CLAUDE\.?AI|CLAUDE SUB"), "ANTHROPIC / CLAUDE"),
     (re.compile(r"AGENT-?ROOM"), "AGENT-ROOM.COM"),
+    (re.compile(r"AMAZON PRIME"), "AMAZON PRIME VIDEO"),
     (re.compile(r"GILMOURS"), "GILMOURS"),
     (re.compile(r"\bDIDI"), "DIDI_NZ"),
     (re.compile(r"WOOLWORTHS|COUNTDOWN"), "WOOLWORTHS"),
@@ -295,6 +296,28 @@ _MERCHANT_ALIASES = (
     (re.compile(r"GOOGLE ONE"), "GOOGLE ONE"),
     (re.compile(r"IWG NEW ZEALAND|\bIWG\b"), "IWG NEW ZEALAND"),
 )
+
+
+def vendor_provenance(merchant: str, description: str = "") -> tuple[str, None]:
+    """Where a merchant name came from, for the report's Source column.
+
+    The column is an audit trail, so it may only claim what actually
+    happened. `_MERCHANT_ALIASES` is a real pattern library - a hit there
+    means a maintained rule recognised this descriptor, which is `pattern`.
+    Anything else got here by stripping bank furniture off the raw text,
+    which identifies nobody, so it stays `unresolved` rather than borrowing
+    credibility it has not earned.
+
+    The URL is always None while we are offline. `companies_office`, `nzbn`
+    and `web` stay in the schema's enum unused until someone decides that
+    merchant tokens may leave the machine; the field is here so turning that
+    on later adds a lookup rather than reshaping the contract.
+    """
+    blob = f"{merchant or ''} {description or ''}".upper()
+    for pat, _canon in _MERCHANT_ALIASES:
+        if pat.search(blob):
+            return "pattern", None
+    return "unresolved", None
 
 
 def descriptor_core(description: str) -> str:
@@ -338,6 +361,16 @@ def normalize_merchant(description: str) -> str:
         " ",
         s,
     )
+    # Sweep up what the digit and suburb rules leave behind. `ATM W/D Wairau
+    # Park A-20:49` loses `20`, `49` and `WAIRAU` above and would otherwise
+    # reach the report as `ATM W/D PARK A- :` - punctuation still pointing at
+    # a timestamp that is no longer there. The underwriter cannot tell which
+    # shop that was. Drop separators with nothing left on either side, then
+    # any dangling one-character fragment of the stripped token.
+    s = re.sub(r"[-:/]+(?=\s|$)", " ", s)
+    s = re.sub(r"(?<=\s)[-:/]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip(" -:/")
+    s = re.sub(r"\s+\w(?=\s|$)", "", s) if re.search(r"\s\w$", s) else s
     s = re.sub(r"\s+", " ", s).strip()
     s = _TRAILING_INDICATOR_RE.sub("", s).strip()
     for pat, canon in _MERCHANT_ALIASES:
@@ -509,6 +542,89 @@ def _looks_like_person_name(piece: str) -> bool:
     # At least one word of real length. `A B` is an abbreviation, not a name.
     words = [w for w in re.split(r"\s+", piece) if w.upper().rstrip(".") not in _TITLES]
     return any(len(w) >= 2 for w in words) and len(words) >= 2
+
+
+# A payer name is a different problem from an applicant name, so it gets its
+# own predicate rather than a looser `_looks_like_person_name`. Up there a
+# false positive prints a wrong legal name on a lending assessment; here it
+# miscategorises one row, and the row is already sitting in `unclear`. What
+# makes it a different problem is the text: the masthead prints `MR A TAYLOR`,
+# while a payment line prints `ZHANG,MENG`, `C ZHANG`, or `MRS YI LIU Yi Yi`.
+# `_PERSON_RE` cannot match a comma at all, which is why it recognised only 27
+# of the 94 payers in the 2026-09-17 run.
+#
+# The rule is: a payer carries one of three markers a bank actually prints -
+# surname-first with a comma, a courtesy title, or an initial standing in for a
+# given name. Requiring a marker is what keeps merchants out. `BIKES TAKA` and
+# `AT INFRINGEMENTS` are two capitalised words like any two-word name, and
+# nothing in their shape says otherwise; without the marker test they classify
+# as people. Five real payers written as two plain words are missed for the
+# same reason. That trade is deliberate: a missed payer stays `unclear` and an
+# underwriter looks at it, while a merchant mislabelled `business_receipts`
+# silently inflates side-business income.
+_PAYER_COMMA = re.compile(r"^[A-Z][A-Za-z'’-]+\s*,\s*[A-Z]", re.I)
+_PAYER_TITLE = re.compile(r"^(?:MR|MRS|MS|MISS|DR|PROF)\.?\s+[A-Z]", re.I)
+# An initial stands in for a name, so something must follow it. A lone
+# trailing letter is the statement's debit/credit indicator or a truncated
+# branch: `Costco Whs Auckland C`, `PAK N SAVE W`, `WOOLWORTHS N` all read
+# as `initial + surname` if the letter is allowed to come last.
+_PAYER_INITIAL = re.compile(r"(?:^|\s)[A-Z]\.?\s+[A-Za-z]{2,}")
+# `52C` in `ZHANG, YIHUA 52C` is what the payer typed in the reference field,
+# not part of their name. Strip it before testing rather than rejecting the
+# row for containing a digit.
+_PAYER_REF_TAIL = re.compile(r"\s+[A-Za-z]*\d[A-Za-z0-9]*(?:\s+.*)?$")
+# `Z Lakeside` is a Z Energy forecourt, and `Z` would otherwise read as an
+# initial. It is the only single-letter brand common enough in NZ statements
+# to be worth naming here.
+_PAYER_Z_BRAND = re.compile(r"^Z\s", re.I)
+_NOT_A_PAYER = re.compile(
+    r"\b(?:LIMITED|LTD|LLC|INC|PTY|COMPANY|CO|TRUST|HOLDINGS|GROUP|SERVICES|"
+    r"SERVICE|SOLUTIONS|ENTERPRISES|CORP|FOUNDATION|SOCIETY|CLUB|SCHOOL|"
+    r"COLLEGE|ACADEMY|BOARD|COUNCIL|AGENCY|AUTHORITY|DEPARTMENT|MINISTRY|"
+    r"BANK|INSURANCE|MOTORS|BIKES|MART|MARKET|STORE|SHOP|CAFE|RESTAURANT|"
+    r"BAKERY|BUTCHER|PHARMACY|DAIRY|LIQUOR|FUEL|PARKING|TRANSPORT|RENTALS|"
+    r"INFRINGEMENTS?|REVENUE|TAX|IRD|DATA|MEDIA|DIGITAL|STUDIO|SALON|CLINIC|"
+    r"DENTAL|MEDICAL|LODGE|HOTEL|MOTEL|TRAVEL|TOURS|CATERING|TAKEAWAY|SUSHI|"
+    r"NOODLE|DUMPLING|KITCHEN|GRILL|PIZZA|BURGER|SUPERMARKETS?|GROCER|"
+    r"PAK|SAVE|WOOLWORTHS|COUNTDOWN|NEW WORLD|FOUR SQUARE|FRESH|FOODSTUFFS?|"
+    r"NZ|NEW ZEALAND|AUCKLAND|"
+    r"WELLINGTON|CHRISTCHURCH|COM)\b",
+    re.I,
+)
+
+
+def looks_like_payer_name(raw: Any) -> bool:
+    """True when a statement descriptor names a person rather than a business.
+
+    Used on the inflow side to recognise side-business takings without
+    knowing any particular name, so it works on a statement the engine has
+    never seen. Direction is the caller's job: the same name on an outflow is
+    a payment to somebody, not revenue.
+    """
+    text = re.sub(r"\s+", " ", str(raw or "")).strip()
+    if not text or len(text) > 60:
+        return False
+    # `SMZ*W S FOODSTUFF` - a star is how a card processor prefixes the
+    # merchant it settled for, so the text after it is a trading name.
+    if _NOT_A_PAYER.search(text) or _PAYER_Z_BRAND.match(text):
+        return False
+    # A comma is a much stronger name marker than `*` is a merchant marker.
+    # Some payer references end in `BAO*`; processor descriptors such as
+    # `PAYPAL *SHOP` do not carry a surname/given-name comma.
+    comma_name = bool(_PAYER_COMMA.search(text))
+    if "*" in text and not comma_name:
+        return False
+    text = _TRAILING_INDICATOR_RE.sub("", text).strip()
+    text = _PAYER_REF_TAIL.sub("", text).strip()
+    if not text or any(ch.isdigit() for ch in text):
+        return False
+    if not (
+        comma_name
+        or _PAYER_TITLE.search(text)
+        or _PAYER_INITIAL.search(text)
+    ):
+        return False
+    return len(re.sub(r"[^A-Za-z]", "", text)) >= 3
 
 
 def _living_situation(line: str) -> str | None:
@@ -768,10 +884,57 @@ def normalize(layout: dict[str, Any], assessment_date: str) -> dict[str, Any]:
     if limit is not None:
         account["credit_limit"] = limit
 
+    attach_fx_merchants(transactions)
+
     account["applicant"] = _applicant_evidence(lines)
     account["conduct"] = _conduct_assessment(lines, transactions, account_type, limit)
 
     return {"account": account, "transactions": transactions}
+
+
+# A foreign-currency card purchase prints across two rows. The money row
+# carries the converted amount and the rate but no merchant; the row under it
+# carries the fee and the merchant, and moves no money:
+#
+#   POS W/D 23.00USD @ 0.5922 conversion rate                        39.56
+#   (INC. $0.72 INTERNATIONAL TRANSACTION FEE) OPENAI OPENAI.COM CA
+#
+# Zeroing the second row is right - it is not a posting. Discarding the only
+# copy of the merchant name is not. Without this the classifier sees a bare
+# exchange rate and can do nothing but call it unclear, which is how 31 rows
+# of OpenAI, Anthropic, Vercel and GitHub ended up as unidentifiable spend.
+_BARE_FX_RE = re.compile(r"^\s*(?:POS\s*W/?D\s+|REFUND\s+)?[\d.]+\s*USD\s*@\s*[\d.]+\s*conversion rate\s*$", re.I)
+_FX_FEE_MERCHANT_RE = re.compile(
+    r"^\(INC\.?\s*\$?[\d.]+\s*INTERNATIONAL TRANSACTION FEE\)\s*(?P<merchant>.+)$", re.I
+)
+
+
+def attach_fx_merchants(transactions: list[dict[str, Any]]) -> int:
+    """Give each bare conversion-rate row the merchant printed beneath it.
+
+    Only the row immediately below, only on the same date, and only when that
+    row is an info row carrying the fee text - so a merchant that already
+    named itself on the money row is never overwritten, and an unrelated
+    posting is never borrowed from.
+    """
+    attached = 0
+    for i, txn in enumerate(transactions):
+        if not _BARE_FX_RE.match(str(txn.get("description") or "")):
+            continue
+        nxt = transactions[i + 1] if i + 1 < len(transactions) else None
+        if not nxt or nxt.get("direction") != "info" or nxt.get("date") != txn.get("date"):
+            continue
+        match = _FX_FEE_MERCHANT_RE.match(str(nxt.get("description") or "").strip())
+        if not match:
+            continue
+        merchant = " ".join(match.group("merchant").split())
+        if not merchant:
+            continue
+        txn["description"] = f"{txn['description']} {merchant}"
+        txn["merchant_normalized"] = normalize_merchant(merchant)
+        txn["fx_merchant_source"] = "attached from the international transaction fee row"
+        attached += 1
+    return attached
 
 
 def _labelled_balance(lines: Iterable[str], label: str) -> float | None:
@@ -1359,8 +1522,24 @@ def _document_index(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 REPORTS_CONTAINER = os.environ.get("REPORTS_CONTAINER", "vikas-reports")
 
 
-def publish_report(content: bytes, filename: str, hours_valid: int = 24) -> dict[str, Any]:
-    """Put the rendered workbook somewhere the user can click, and return a link.
+def _report_content_type(filename: str, content_type: str | None = None) -> str:
+    if content_type:
+        return content_type
+    lower = filename.lower()
+    if lower.endswith(".html"):
+        return "text/html; charset=utf-8"
+    if lower.endswith(".xlsx"):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return "application/octet-stream"
+
+
+def publish_report(
+    content: bytes,
+    filename: str,
+    hours_valid: int = 24,
+    content_type: str | None = None,
+) -> dict[str, Any]:
+    """Put the rendered report somewhere the user can click, and return a link.
 
     Handing the caller a base64 blob does not deliver a file. An agent has no
     way to write bytes to disk, so it reports "Attached: lender-assessment.xlsx"
@@ -1393,7 +1572,7 @@ def publish_report(content: bytes, filename: str, hours_valid: int = 24) -> dict
         data=content,
         overwrite=True,
         content_settings=ContentSettings(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            content_type=_report_content_type(filename, content_type)
         ),
     )
 
@@ -1476,6 +1655,78 @@ def store_batch(batch: dict[str, Any]) -> str:
     payload = json.dumps(batch, ensure_ascii=False).encode("utf-8")
     _batches_container().upload_blob(name=f"{batch_id}.json", data=payload, overwrite=False)
     return batch_id
+
+
+CLASSIFICATION_SUFFIX = ".classifications.json"
+
+
+def _classification_key(row: dict[str, Any]) -> tuple[str, str]:
+    """What makes two classifications the same decision.
+
+    A transaction_id classification is about one row; a merchant one is about
+    every row of that merchant. They are different keys on purpose, so a
+    per-row correction can sit alongside the merchant rule it overrides.
+    """
+    txn_id = str(row.get("transaction_id") or "").strip()
+    if txn_id:
+        return ("txn", txn_id)
+    return ("merchant", str(row.get("merchant") or "").strip().upper())
+
+
+def merge_classifications(
+    batch_id: str, rows: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Accumulate a batch's classifications across calls.
+
+    A binder of 238 merchants cannot be reclassified in one pass, and asking
+    the agent to resend everything it already decided is what exhausted its
+    context window. The server keeps what it has been told; a repair pass
+    sends only the merchants it just worked out.
+
+    Last write wins, so a correction is a resend of that one entry. Order is
+    stable - previously stored entries keep their position, new ones append -
+    so the same calls always produce the same list.
+    """
+    batch_id = validate_batch_id(batch_id)
+    blob = f"{batch_id}{CLASSIFICATION_SUFFIX}"
+    from azure.core.exceptions import ResourceNotFoundError
+
+    try:
+        stored = json.loads(_batches_container().download_blob(blob).readall())
+    except ResourceNotFoundError:
+        stored = []
+    if not isinstance(stored, list):
+        stored = []
+
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in stored:
+        if isinstance(row, dict):
+            merged[_classification_key(row)] = row
+    known_before = len(merged)
+
+    added = replaced = 0
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        key = _classification_key(row)
+        if key == ("merchant", ""):
+            continue
+        if key in merged:
+            replaced += 1
+        else:
+            added += 1
+        merged[key] = row
+
+    out = list(merged.values())
+    payload = json.dumps(out, ensure_ascii=False).encode("utf-8")
+    _batches_container().upload_blob(name=blob, data=payload, overwrite=True)
+    return out, {
+        "known_before": known_before,
+        "sent_this_call": len([r for r in (rows or []) if isinstance(r, dict)]),
+        "added": added,
+        "replaced": replaced,
+        "total": len(out),
+    }
 
 
 def load_batch(batch_id: str) -> dict[str, Any]:

@@ -50,6 +50,22 @@ Income labels (not living expenses): `salary_wages`, `benefit`, `child_support_r
 
 Other: `underwriter_manual` (council rates), `unclear` (confidence < 0.6).
 
+**Every worklist `transaction_id` must be classified.** Dropping an id is a join-miss (engine unclear with no model reason). Prefer `unclear` plus a reason over omitting the row.
+
+**Side business vs salary.** Repeated small inflows from many personal names — especially bun / pork bun / egg / food-sale notes — are **gross side-business receipts**, not wages and **not assessable income**. Classify: `business_receipts`, include false, `is_business` yes, reason `side-business gross receipts, not net profit`. Never `unclear` — that means the file could not tell, and this is a row you identified. Never `salary_wages` or `other_income` — the engine would add each payer to Part 1.4 Income and over-monthlyise. Still classify every id (omit = join-miss). Do not treat the total as net profit or put it in recommended living. The turnover figure belongs in an evidence gap / underwriter note, not in income.
+
+Person-name **outflows** in that same food-trade pattern are business COGS/payouts: `is_business` yes, include false, not household grocery.
+
+Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering channel) → `is_business` yes, include false, `business_reason` `wholesale stock / COGS`. If bun/egg sales also appear in the binder, do not leave these as `review`.
+
+Workspace lease (IWG/Regus-type), advertising (Google Ads-type), trade payment-processor fees (GoCardless-type), and professional/trade software → `is_business` yes, include false — not household subscriptions. A fixed amount repeating monthly from a processor is a trade subscription; do not leave it `unclear` because the payee is a processor rather than a shop.
+
+**Cash out is living expense, not unknown spend.** `ATM W/D` and merchant-less `POS W/D` → `food_grocery_clothing_personal_care` (or `other`), include **true**, reason `cash withdrawal - purpose not printed, counted as living expense`. Leaving it `unclear` drops it from every total and makes the applicant look cheaper to run than they are; a lender reads unexplained cash as spending until shown otherwise.
+
+A descriptor that genuinely names nothing stays `unclear`, with a reason saying what is missing — a truncated shop name, a bare PayPal reference, a company whose trade you cannot tell.
+
+**A conversion-rate line IS a purchase — classify it by its merchant.** The extractor lifts the merchant off the international-transaction-fee row beneath, so `... conversion rate OPENAI OPENAI.COM CA` is an OpenAI charge billed in USD; treat it as you would the same merchant in NZD. Never fall back to `unclear` because the text contains an exchange rate. Only a conversion line with no merchant name at all stays `unclear`, include false, reason `foreign currency conversion line item, merchant not printed`.
+
 If `category` is `insurance`, set `insurance_type`. If `utilities`, set `utility_type`.
 
 `include_in_living_expenses` is true only for recurring living-expense categories excluding `one_off`.

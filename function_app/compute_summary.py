@@ -3,12 +3,64 @@
 
 from __future__ import annotations
 
+import json
+import re
+
 from collections import defaultdict
 from datetime import date, datetime
+from functools import lru_cache
+from pathlib import Path
 from statistics import median
 from typing import Any
 
-from extract_normalize import collapse_merchant, descriptor_core
+from extract_normalize import (
+    collapse_merchant,
+    descriptor_core,
+    looks_like_payer_name,
+    normalize_merchant,
+)
+
+UTILITY_TYPES = frozenset({"power", "water", "gas", "internet", "phone_mobile", "other_utility"})
+INSURANCE_TYPES = frozenset({
+    "home_contents", "vehicle", "life_personal_risk", "medical_health", "pet", "funeral", "other_insurance"
+})
+INCOME_TYPES = frozenset({
+    "salary_wages", "benefit", "child_support_received", "rental_income",
+    "investment_income", "other_income", "business_receipts",
+})
+
+
+def _closed_subcategory(row: dict[str, Any]) -> str | None:
+    """Return only a subtype from the three closed classification enums."""
+    category = row.get("category")
+    if category == "utilities" and row.get("utility_type") in UTILITY_TYPES:
+        return str(row["utility_type"])
+    if category == "insurance" and row.get("insurance_type") in INSURANCE_TYPES:
+        return str(row["insurance_type"])
+    if category in INCOME and row.get("income_type") in INCOME_TYPES:
+        return str(row["income_type"])
+    return None
+
+
+def _review_type(category: str, business_flag: str) -> str | None:
+    if category == "unclear":
+        return "unclear"
+    if category == "underwriter_manual":
+        return "underwriter_manual"
+    if business_flag in {"yes", "review"}:
+        return "business_review"
+    return None
+
+
+def _income_regularity(frequency: str, observations: int) -> str:
+    """Closed display rule: one-off lacks evidence; unknown is not assessable."""
+    if frequency == "unknown":
+        return "not_assessable"
+    if frequency == "one_off" or observations < 2:
+        return "insufficient_observations"
+    if frequency == "irregular":
+        return "irregular"
+    return "regular"
 
 RECOMMENDED = frozenset(
     {
@@ -38,8 +90,17 @@ INCOME = frozenset(
         "income_credit",
     }
 )
+# Trading receipts from a side business. Deliberately not in INCOME: a bank
+# statement evidences money arriving, not profit, and servicing runs on
+# profit. Deliberately not `unclear` either - "unclear" means the file could
+# not tell, and this is the opposite, a row we identified. Calling a known
+# thing unknown is what made an applicant's bun-and-egg takings read as 150
+# unclassified rows.
+BUSINESS_RECEIPTS = "business_receipts"
+
 EXCLUSIONS = frozenset(
     {
+        BUSINESS_RECEIPTS,
         "internal_transfer",
         "credit_card_repayment",
         "loan_repayment",
@@ -397,6 +458,52 @@ def effective_include(category: str, direction: str, model_include: bool) -> boo
     return bool(model_include) and category in RECOMMENDED
 
 
+# How a statement writes a person's name is not how the classifier writes it.
+# The same payer arrives as "MISS Y ZHANG a", "Direct Credit MISS Y ZHANG" and
+# "Bill Payment ZHANG RUOYU"; the model claims one spelling and the engine's
+# exact-match join drops the rest as unclassified. This key is used ONLY to
+# match a classification to a row - never to group amounts - so widening it
+# cannot move a total.
+_JOIN_PREFIXES = (
+    "DIRECT CREDIT", "DIRECT DEBIT", "BILL PAYMENT", "TRANSFER TO",
+    "TRANSFER FROM", "TFR TO", "TFR FROM", "POS W/D", "ATM W/D",
+    "PAY", "FROM", "TFR",
+)
+_JOIN_SUFFIXES = ("BILL PAYMENT", "DIRECT CREDIT", "DIRECT DEBIT")
+
+
+def merchant_join_key(raw: Any) -> str:
+    """Match key for one payer, however the statement spelled them."""
+    text = " ".join(str(raw or "").split())
+    if not text:
+        return ""
+    # Transport wrappers first, keeping the original casing: the alias rule
+    # below needs to see which words the statement actually lower-cased.
+    changed = True
+    while changed:
+        changed = False
+        upper = text.upper()
+        for prefix in _JOIN_PREFIXES:
+            if upper.startswith(prefix + " ") and len(text) > len(prefix) + 1:
+                text = text[len(prefix) + 1:].strip()
+                changed = True
+                break
+        if changed:
+            continue
+        for suffix in _JOIN_SUFFIXES:
+            if upper.endswith(" " + suffix) and len(text) > len(suffix) + 1:
+                text = text[: -(len(suffix) + 1)].strip()
+                changed = True
+                break
+    # A trailing all-lowercase word is the payer's own reference, not part of
+    # the name: "MISS Y ZHANG a". Only drop it when at least two words of name
+    # remain, so "PAY Xiuyuan zhang" keeps its surname.
+    parts = text.split(" ")
+    if len(parts) >= 3 and parts[-1].islower() and len(parts[-1]) <= 15:
+        parts = parts[:-1]
+    return " ".join(" ".join(parts).upper().split())
+
+
 def _index_classifications(
     batch: dict[str, Any], txns: list[dict[str, Any]] | None = None
 ) -> dict[str, dict[str, Any]]:
@@ -421,20 +528,153 @@ def _index_classifications(
 
     by_merchant: dict[str, list[str]] = defaultdict(list)
     for txn in txns or []:
-        key = str(txn.get("merchant_normalized") or "").upper().strip()
-        if key:
-            by_merchant[key].append(txn["transaction_id"])
+        for key in {
+            str(txn.get("merchant_normalized") or "").upper().strip(),
+            merchant_join_key(txn.get("merchant_normalized")),
+            merchant_join_key(txn.get("description")),
+        }:
+            if key:
+                by_merchant[key].append(txn["transaction_id"])
 
     rows = batch.get("classifications") or []
     for row in rows:
-        merchant = str(row.get("merchant") or "").upper().strip()
-        if merchant and not row.get("transaction_id"):
-            for txn_id in by_merchant.get(merchant, ()):
-                out[txn_id] = row
+        raw = str(row.get("merchant") or "").strip()
+        if raw and not row.get("transaction_id"):
+            for key in {raw.upper(), merchant_join_key(raw)}:
+                for txn_id in by_merchant.get(key, ()):
+                    out[txn_id] = row
     for row in rows:
         if row.get("transaction_id"):
             out[row["transaction_id"]] = row
     return out
+
+
+# Merchant memory. The model is handed 238 merchants and, on a real binder,
+# hands back 67-115 of them; everything it leaves out lands in the ledger as
+# unclear, and repair passes do not reliably close the gap. A merchant's
+# nature does not change between runs, so a classification an underwriter has
+# already accepted is a better default than "unclear" - but it is only a
+# default: whatever the model sends for a row always wins.
+#
+# Scope is the guard against leaking one applicant into another. A shop
+# (DIDI, a car park, a supermarket) is the same shop for everyone, so a
+# household outflow category travels. Anything that describes the applicant
+# rather than the merchant - who pays them, who they pay, what counts as
+# their business - is pinned to the statement files it was learned from.
+MERCHANT_MEMORY_PATH = Path(__file__).with_name("merchant_memory.json")
+GLOBAL_MEMORY_CATEGORIES = frozenset({
+    "transport", "utilities", "insurance", "food_grocery_clothing_personal_care",
+    "recreation_entertainment", "monthly_subscriptions", "education",
+    "childcare_child_support", "rent_board_paid", "medical", "extracurricular",
+})
+_MEMORY_FIELDS = (
+    "category", "include_in_living_expenses", "is_business", "business_reason",
+    "utility_type", "insurance_type", "income_type",
+)
+
+
+def memory_keys_for_descriptor(description: str) -> set[str]:
+    """Join keys a raw statement descriptor produces under TODAY's normaliser.
+
+    Memory stores the descriptors it learned from, not the keys, because the
+    normaliser keeps improving: since the 2026-09-17 run it began stripping
+    `- :` time residue and folding `PAK N SAVE` to `PAK SAVE`, and every key
+    frozen at that date stopped matching. Re-keying at load time means a
+    normaliser change can never silently switch the memory off.
+    """
+    return {
+        k for k in (
+            merchant_join_key(normalize_merchant(description)),
+            merchant_join_key(description),
+        ) if k
+    }
+
+
+@lru_cache(maxsize=4)
+def load_merchant_memory(path: str | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    """(join key, direction) -> remembered classification. Empty if no file."""
+    source = Path(path) if path else MERCHANT_MEMORY_PATH
+    if not source.is_file():
+        return {}
+    data = json.loads(source.read_text(encoding="utf-8"))
+    candidates: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for entry in data.get("entries") or []:
+        direction = str(entry.get("direction") or "")
+        if direction not in {"inflow", "outflow"} or entry.get("category") in {None, "unclear"}:
+            continue
+        keys = {str(entry.get("key") or "").upper().strip()} - {""}
+        for descriptor in entry.get("descriptors") or []:
+            keys |= memory_keys_for_descriptor(descriptor)
+        for key in keys:
+            candidates[(key, direction)].append(entry)
+    # Two remembered merchants that now fold onto one key but disagree are a
+    # guess either way; leave that key to the model rather than pick one.
+    return {
+        key: entries[0]
+        for key, entries in candidates.items()
+        if len({(e["category"], e.get("is_business")) for e in entries}) == 1
+    }
+
+
+def memory_classification(
+    txn: dict[str, Any], memory: dict[tuple[str, str], dict[str, Any]]
+) -> dict[str, Any] | None:
+    """A classification row for `txn` from memory, or None.
+
+    Tries the same keys the model join uses, so a remembered merchant matches
+    exactly the rows a model classification for it would have matched.
+    """
+    direction = str(txn.get("direction") or "")
+    if not memory or direction not in {"inflow", "outflow"}:
+        return None
+    keys = dict.fromkeys(
+        k for k in (
+            merchant_join_key(txn.get("merchant_normalized")),
+            merchant_join_key(txn.get("description")),
+            str(txn.get("merchant_normalized") or "").upper().strip(),
+        ) if k
+    )
+    for key in keys:
+        entry = memory.get((key, direction))
+        if entry is None:
+            continue
+        files = entry.get("source_files")
+        if files and str(txn.get("source_file") or "") not in files:
+            continue
+        row = {field: entry[field] for field in _MEMORY_FIELDS if entry.get(field) is not None}
+        row["reason"] = f"merchant memory: {entry.get('reason') or entry['category']}"
+        return row
+    return None
+
+
+def payer_classification(txn: dict[str, Any]) -> dict[str, Any] | None:
+    """Side-business takings for an inflow under a person's name, or None.
+
+    Memory can only speak for merchants an accepted run already saw, which
+    makes it useless for the payers of the next applicant - and their payers
+    are the bulk of what a side business looks like on a statement. This is
+    the general form of the same call: it reads the shape of the name instead
+    of matching a remembered one, so it works on a binder the engine has
+    never processed.
+
+    Only inflows. `ZHANG,MENG` arriving is revenue; the same name leaving is
+    the applicant paying somebody, and calling that revenue would both invent
+    income and hide a living expense.
+    """
+    if str(txn.get("direction") or "") != "inflow":
+        return None
+    for field in ("merchant_normalized", "description"):
+        value = str(txn.get(field) or "").strip()
+        if value and looks_like_payer_name(value):
+            return {
+                "category": "business_receipts",
+                "is_business": "yes",
+                "income_type": "business_receipts",
+                "include_in_living_expenses": False,
+                "business_reason": "inflow under a person's name",
+                "reason": "payer name: side-business gross receipts, not net profit",
+            }
+    return None
 
 
 def _liability_rows(
@@ -518,15 +758,306 @@ def _conduct_rows(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+# --- Evidence gaps -----------------------------------------------------------
+#
+# A binder can be arithmetically perfect and still be the wrong binder. These
+# checks read what is already in the extract and name what is missing from it,
+# so nobody signs a complete-looking report over an incomplete file. Every
+# check reports absence of evidence, never a finding of fact - "no power bill
+# in these statements" is not "this household has no power".
+
+_OTHER_BANKS = {
+    "ASB": r"\bASB\b",
+    "BNZ": r"\bBNZ\b",
+    "Westpac": r"\bWESTPAC\b",
+    "ANZ": r"\bANZ\b",
+    "Kiwibank": r"\bKIWIBANK\b",
+    "TSB": r"\bTSB\b",
+    "Co-operative Bank": r"\bCO-?OPERATIVE BANK\b",
+    "Heartland": r"\bHEARTLAND\b",
+    "SBS": r"\bSBS BANK\b",
+    "Rabobank": r"\bRABOBANK\b",
+}
+_DEPENDANT_EVIDENCE = (
+    r"\bSCHOOL\b|\bCOLLEGE\b|\bINTERMEDIATE\b|\bKINDERGARTEN\b|\bKINDY\b|"
+    r"\bDAYCARE\b|\bDAY CARE\b|\bCHILDCARE\b|\bEARLY LEARNING\b|\bPRE-?SCHOOL\b|"
+    r"\bBOARD OF TRUSTEES\b|\bPTA\b"
+)
+_VEHICLE_EVIDENCE = (
+    r"\bNZ TRANSPORT AGENCY\b|\bNZTA\b|\bWAKA KOTAHI\b|\bREGO\b|\bVTNZ\b|\bVINZ\b|"
+    r"\bWOF\b|\bAA \b|\bAUTOMOBILE ASSOCIATION\b|\bREPCO\b|\bMOTOR\b|\bTYRE\b|"
+    r"\bAUTOMOTIVE\b|\bPANELBEAT\b|\bMECHANIC\b"
+)
+_VEHICLE_INSURER = (
+    r"\bAMI\b|\bSTATE INSURANCE\b|\bTOWER\b|\bVERO\b|\bAA INSURANCE\b|\bPROTECTA\b|"
+    r"\bSTAR INSURANCE\b|\bINITIO\b|\bCOVE INSURANCE\b"
+)
+_ENERGY_RETAILER = (
+    r"\bMERIDIAN\b|\bGENESIS\b|\bCONTACT ENERGY\b|\bMERCURY\b|\bNOVA ENERGY\b|"
+    r"\bFRANK ENERGY\b|\bELECTRIC KIWI\b|\bPOWERSHOP\b|\bFLICK ELECTRIC\b|"
+    r"\bPULSE ENERGY\b|\bTRUSTPOWER\b|\bZ ENERGY LTD\b|\bVECTOR\b|\bELECTRICITY\b|"
+    r"\bPOWER CO\b|\bSLINGSHOT POWER\b|\bTOAST ELECTRIC\b|\bECOTRICITY\b"
+)
+_REMITTER = (
+    r"\bRMTLY\b|\bREMITLY\b|\bWISE\b|\bTRANSFERWISE\b|\bOFX\b|\bWESTERN UNION\b|"
+    r"\bMONEYGRAM\b|\bXE\.COM\b|\bWORLDREMIT\b|\bORBIT REMIT\b|\bRIA MONEY\b"
+)
+REMITTANCE_WINDOW_DAYS = 30
+REMITTANCE_MIN_AMOUNT = 500.0
+# Trading receipts look like this: lots of small credits, lots of different
+# payers. One flatmate paying board is neither.
+SIDE_INCOME_MAX_TICKET = 500.0
+SIDE_INCOME_MIN_CREDITS = 10
+SIDE_INCOME_MIN_PAYERS = 5
+# Named, not a bare string, because two places have to agree on it: the
+# income row that carries the turnover and the audit figure that leaves it
+# out. A servicing calculation reads the second one.
+SIDE_INCOME_TYPE = "side_business_gross_not_assessable"
+
+
+def _observation_months(accounts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> float:
+    """Months the file actually observes: earliest start to latest end."""
+    starts, ends = [], []
+    for a in accounts:
+        try:
+            starts.append(parse_date(a.get("period_start")))
+            ends.append(parse_date(a.get("period_end")))
+        except (ValueError, TypeError):
+            continue
+    if starts and ends:
+        return max(_months_between(min(starts), max(ends)), 1.0)
+    dates = []
+    for r in rows:
+        try:
+            dates.append(parse_date(r.get("date")))
+        except (ValueError, TypeError):
+            continue
+    if dates:
+        return max(_months_between(min(dates), max(dates)), 1.0)
+    return 1.0
+
+
+def _row_blob(row: dict[str, Any]) -> str:
+    return f"{row.get('description') or ''} {row.get('merchant_normalized') or ''}".upper()
+
+
+def _gap(topic: str, note: str, evidence: list[str]) -> dict[str, Any]:
+    return {
+        "topic": topic,
+        "note": note,
+        "evidence": "; ".join(evidence[:6]) if evidence else "no matching transactions",
+        "requires_signoff": True,
+    }
+
+
+def evidence_gaps(
+    joined: list[dict[str, Any]],
+    accounts: list[dict[str, Any]],
+    applicant: dict[str, Any],
+    assessment_date: str | None,
+    insurance_monthly: dict[str, float],
+    utility_monthly: dict[str, float],
+) -> list[dict[str, Any]]:
+    """Name what this binder cannot answer. Detection only - no amount moves."""
+
+    rows = [r for r in joined if r.get("direction") != "info"]
+    gaps: list[dict[str, Any]] = []
+
+    # (a) A transfer naming a bank whose statement is not in this binder.
+    held = {str(a.get("institution") or "").upper() for a in accounts}
+    for name, pattern in _OTHER_BANKS.items():
+        if name.upper() in held:
+            continue
+        hits = [r for r in rows if re.search(pattern, _row_blob(r))]
+        if hits:
+            gaps.append(_gap(
+                f"Account outside binder - {name}",
+                f"{len(hits)} transaction(s) name {name}, which has no statement in this "
+                f"binder. Spend settled from that account is invisible here.",
+                [f"{r['date']} {str(r.get('description') or '')[:40]} {abs(float(r.get('amount') or 0)):.2f}" for r in hits],
+            ))
+
+    # (b) School / childcare spend while the file records no dependants.
+    dependants = str((applicant or {}).get("Dependants") or "").strip()
+    dependants_unknown = (not dependants) or dependants.lower().startswith("not provided")
+    child_hits = [r for r in rows if re.search(_DEPENDANT_EVIDENCE, _row_blob(r))]
+    if child_hits and dependants_unknown:
+        schools = sorted({str(r.get("merchant_normalized") or r.get("description") or "")[:40] for r in child_hits})
+        gaps.append(_gap(
+            "Dependants not recorded",
+            f"{len(child_hits)} school/childcare transaction(s) across {len(schools)} provider(s), "
+            f"but Dependants is '{dependants or 'blank'}'. Dependant count drives the living "
+            f"expense benchmark and is unresolved.",
+            schools,
+        ))
+
+    # (c) Vehicle running costs with no vehicle insurer anywhere in the file.
+    vehicle_hits = [r for r in rows if re.search(_VEHICLE_EVIDENCE, _row_blob(r))]
+    insurer_hits = [r for r in rows if re.search(_VEHICLE_INSURER, _row_blob(r))]
+    subtypes = " ".join(insurance_monthly).lower()
+    subtype_vehicle = any(w in subtypes for w in ("vehicle", "car", "motor"))
+    if vehicle_hits and not insurer_hits and not subtype_vehicle:
+        gaps.append(_gap(
+            "Vehicle costs without vehicle insurance",
+            f"{len(vehicle_hits)} vehicle-related transaction(s) but no vehicle insurer in "
+            f"this binder. Either the premium is paid elsewhere, is annual and outside the "
+            f"window, or the vehicle is uninsured.",
+            sorted({str(r.get("merchant_normalized") or "")[:40] for r in vehicle_hits if r.get("merchant_normalized")}),
+        ))
+
+    # (d) No energy retailer at all across the whole window.
+    if rows and not any(re.search(_ENERGY_RETAILER, _row_blob(r)) for r in rows):
+        days = sum(int(a.get("days_covered") or 0) for a in accounts)
+        util_subtypes = " ".join(utility_monthly).lower()
+        if not any(w in util_subtypes for w in ("power", "electric", "energy", "gas")):
+            gaps.append(_gap(
+                "No power or gas in the file",
+                f"No electricity or gas retailer appears in {days} statement-days. A household "
+                f"pays for energy somewhere - this binder does not show where.",
+                [],
+            ))
+
+    # (e) Large money out of the country close to the assessment date.
+    if assessment_date:
+        try:
+            asof = parse_date(assessment_date)
+        except (ValueError, TypeError):
+            asof = None
+        if asof:
+            def _within_window(row: dict[str, Any]) -> bool:
+                # A gap check is a reporting aid. It must never be the thing
+                # that fails an assessment, so one unreadable date drops that
+                # row from this check rather than raising.
+                try:
+                    days = (asof - parse_date(row.get("date"))).days
+                except (ValueError, TypeError):
+                    return False
+                return 0 <= days <= REMITTANCE_WINDOW_DAYS
+
+            recent = [
+                r for r in rows
+                if r.get("direction") == "outflow"
+                and abs(float(r.get("amount") or 0)) >= REMITTANCE_MIN_AMOUNT
+                and re.search(_REMITTER, _row_blob(r))
+                and _within_window(r)
+            ]
+            if recent:
+                total = sum(abs(float(r.get("amount") or 0)) for r in recent)
+                gaps.append(_gap(
+                    "Large offshore transfer before assessment",
+                    f"{len(recent)} remittance(s) totalling {total:.2f} left the country within "
+                    f"{REMITTANCE_WINDOW_DAYS} days of the assessment date. Excluded as one-off; "
+                    f"the reason for the transfer is not evidenced.",
+                    [f"{r['date']} {str(r.get('description') or '')[:40]} {abs(float(r.get('amount') or 0)):.2f}" for r in recent],
+                ))
+
+    # (f) Many small credits from many different payers, none of them read as
+    # income. That is the shape of trading receipts, and a side business the
+    # file never assessed changes both sides of the assessment: the receipts
+    # are not in income, and the cost of whatever was sold is sitting in
+    # household spending. Deliberately shape-based - counterparty count and
+    # ticket size - rather than guessing which descriptions are personal
+    # names; a name heuristic misreads shop names and remitters, and this
+    # check has to be defensible to an underwriter.
+    credits = [
+        r for r in rows
+        if r.get("direction") == "inflow"
+        and r.get("category") in {BUSINESS_RECEIPTS, "unclear", "underwriter_manual"}
+        and 0 < abs(float(r.get("amount") or 0)) <= SIDE_INCOME_MAX_TICKET
+    ]
+    payers = {str(r.get("merchant_normalized") or r.get("description") or "").strip().upper()
+              for r in credits}
+    payers.discard("")
+    if len(credits) >= SIDE_INCOME_MIN_CREDITS and len(payers) >= SIDE_INCOME_MIN_PAYERS:
+        total = sum(abs(float(r.get("amount") or 0)) for r in credits)
+        # The window is the span the statements cover together, not the sum of
+        # their day counts. Two overlapping statements - 61 days inside 92 -
+        # sum to 153 and would divide a three-month turnover by five, which
+        # understates the business and flatters the applicant.
+        months = _observation_months(accounts, credits)
+        gaps.append(_gap(
+            "Unassessed receipts - possible trading income",
+            f"{len(credits)} credit(s) totalling {total:.2f} ({total / months:.2f}/month) "
+            f"from {len(payers)} different payers, none classified as income. That is the "
+            f"shape of trading receipts. If it is a business, this binder shows turnover "
+            f"and not profit - the receipts are outside income and the cost of sales is "
+            f"inside household spending. Obtain business financials before relying on "
+            f"either figure.",
+            sorted(
+                (f"{r['date']} {str(r.get('description') or '')[:34]} "
+                 f"{abs(float(r.get('amount') or 0)):.2f}" for r in credits),
+                key=lambda t: -float(t.rsplit(" ", 1)[1]),
+            ),
+        ))
+
+    return gaps
+
+
+# A repair pass can only fix what it can see. The HTTP layer drops `part2`
+# from the Chat response because the full ledger is too big for the tool
+# channel, which left the agent reading `join_miss_rows: 91` with no way to
+# learn WHICH merchants missed - so it had nothing to re-classify and the
+# unclear rows stayed unclear. This is the same list keyed by merchant
+# instead of by row: a few hundred bytes per merchant rather than per
+# transaction, which is small enough to survive the slimming.
+UNCLASSIFIED_MERCHANT_CAP = 120
+
+
+def unclassified_merchants(joined: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Distinct merchants whose rows came out of the join unclassified.
+
+    Direction is carried because it changes the answer: an unclassified
+    *inflow* from a person's name is side-business takings, while the same
+    name on an outflow is not. Truncated descriptor, not the whole row.
+    """
+    buckets: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in joined:
+        if row.get("classified") or row.get("direction") == "info":
+            continue
+        merchant = str(row.get("merchant_normalized") or "").strip()
+        descriptor = str(row.get("description") or "").strip()
+        if not merchant and not descriptor:
+            continue
+        direction = str(row.get("direction") or "outflow")
+        key = (merchant or descriptor, direction)
+        bucket = buckets.get(key)
+        if bucket is None:
+            entry = {"merchant": key[0], "direction": direction, "rows": 1}
+            # Only carry the raw descriptor when the normalised merchant has
+            # thrown something away. Repeating the same string twice per
+            # merchant is what pushes this list back out of the tool channel.
+            if not descriptor.upper().startswith(key[0].upper()):
+                entry["example"] = descriptor[:48]
+            buckets[key] = entry
+        else:
+            bucket["rows"] += 1
+    ordered = sorted(buckets.values(), key=lambda b: (-b["rows"], b["merchant"]))
+    return ordered[:UNCLASSIFIED_MERCHANT_CAP]
+
+
 def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) -> dict[str, Any]:
     txns = canonical.get("transactions") or []
     by_id = _index_classifications(classifications, txns)
     accounts = canonical.get("accounts") or []
     assessment_date = canonical.get("assessment_date") or classifications.get("assessment_date")
+    memory = (
+        load_merchant_memory()
+        if classifications.get("use_merchant_memory", True)
+        else {}
+    )
 
     joined = []
     for txn in txns:
-        cls = by_id.get(txn["transaction_id"], {})
+        cls = by_id.get(txn["transaction_id"])
+        source = "model" if isinstance(cls, dict) and cls else None
+        if source is None:
+            cls = memory_classification(txn, memory)
+            source = "memory" if cls else None
+        if source is None:
+            cls = payer_classification(txn)
+            source = "payer_name" if cls else None
+        classified = isinstance(cls, dict) and bool(cls)
+        cls = cls or {}
         category = cls.get("category") or "unclear"
         direction = txn.get("direction") or "info"
         amount = float(txn.get("amount") or 0)
@@ -539,6 +1070,11 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         if business_flag == "yes":
             include = False
         resolved_account = _resolve_account_id(txn, accounts)
+        reason = str(cls.get("reason") or "").strip()
+        if not classified:
+            reason = "join miss - no classification for this transaction"
+        elif category == "unclear" and not reason:
+            reason = "model low confidence / ambiguous"
         joined.append(
             {
                 **txn,
@@ -548,11 +1084,24 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "model_include": bool(cls.get("include_in_living_expenses")),
                 "suggested_frequency": cls.get("suggested_frequency") or "unknown",
                 "merchant_normalized": merchant,
+                # Merchant-nature risk only, and only from the closed enum.
+                # Anything else the model puts here is dropped rather than
+                # rendered to an underwriter as a flagged transaction.
+                "risk_flag": (
+                    str(cls.get("risk_flag") or "").strip().lower()
+                    if str(cls.get("risk_flag") or "").strip().lower()
+                    in {"gambling", "payday_high_cost_lending", "bnpl_arrears"}
+                    else None
+                ),
                 "is_business": business_flag,
                 "business_reason": str(cls.get("business_reason") or "").strip(),
-                "reason": cls.get("reason") or "",
+                "reason": reason,
+                "classified": classified,
+                "classification_source": source,
+                "confidence": cls.get("confidence") if source == "model" else None,
                 "utility_type": cls.get("utility_type"),
                 "insurance_type": cls.get("insurance_type"),
+                "income_type": cls.get("income_type"),
                 "account_id": resolved_account or txn.get("account_id"),
             }
         )
@@ -601,6 +1150,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
     utility_monthly: dict[str, float] = defaultdict(float)
     insurance_monthly: dict[str, float] = defaultdict(float)
     business_monthly = 0.0
+    rent_cadence_notes: list[dict[str, Any]] = []
     account_by_id = {a.get("account_id"): a for a in accounts}
 
     for (category, merchant), rows in streams.items():
@@ -694,24 +1244,62 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 / stream_months
             )
             # Repeating rent of $2,880 plus catch-up/fees must not average to
-            # $4,116. If the same charge posted at least twice, that amount is
-            # the monthly rent; the extras stay visible on Part 2.
-            if category == "rent_board_paid" and dominant_cluster_size(
-                [r["amount"] for r in rows]
-            ) >= 2:
+            # $4,116: the repeating amount is the rent, and the extras stay
+            # visible on Part 2 rather than being monthlyised.
+            #
+            # When that amount posts more often than the window has months,
+            # the engine still reports $2,880. Four postings in 3.02 months
+            # can be a tenancy that bills fortnightly, a catch-up after
+            # arrears, or a second property - and those have different
+            # servicing consequences that no amount of arithmetic can tell
+            # apart. Guessing 4/3.02 and writing $3,811 would put a number
+            # nobody can source into recommended living. So the cadence is
+            # reported as a question for the underwriter, with the figure the
+            # cadence reading would give, and the money does not move.
+            rent_cluster_n = dominant_cluster_size([r["amount"] for r in rows])
+            if category == "rent_board_paid" and rent_cluster_n >= 2:
                 monthly = monthly_equivalent(typical, "monthly")
+                cadence = rent_cluster_n / stream_months
+                if cadence > 1.0:
+                    rent_cadence_notes.append(
+                        {
+                            "topic": "Rent cadence",
+                            "note": (
+                                f"{merchant}: repeating ${typical:.2f} posted "
+                                f"{rent_cluster_n} times in {stream_months:.2f} months "
+                                f"(not a clean monthly cycle). Reported monthly rent is "
+                                f"the repeating amount, ${monthly:.2f}. Read as a cadence "
+                                f"instead it would be ${typical * cadence:.2f}/month, and "
+                                f"the all-in run-rate is ${run_rate:.2f} - the engine uses "
+                                f"neither. Confirm the contracted rent and what the extra "
+                                f"postings are (fortnightly tenancy, arrears catch-up, or "
+                                f"a second property) before relying on this line."
+                            ),
+                            "requires_signoff": True,
+                        }
+                    )
         elif freq == "one_off" or freq == "unknown":
             monthly = 0.0
         else:
             monthly = monthly_equivalent(typical, freq)
 
         dates_observed = sorted({r["date"] for r in rows})
+        rent_cluster_n = dominant_cluster_size([r["amount"] for r in rows])
+        rent_cadence_adjusted = (
+            freq == "irregular"
+            and category == "rent_board_paid"
+            and rent_cluster_n >= 2
+        )
         calculation_basis = (
             (
-                f"dominant repeating amount; extras not monthlyised"
-                if freq == "irregular"
-                and category == "rent_board_paid"
-                and dominant_cluster_size([r["amount"] for r in rows]) >= 2
+                (
+                    f"dominant repeating amount; extras not monthlyised "
+                    f"({rent_cluster_n} postings in {stream_months:.2f} months "
+                    f"- see the Rent cadence note)"
+                    if rent_cluster_n / stream_months > 1.0
+                    else "dominant repeating amount; extras not monthlyised"
+                )
+                if rent_cadence_adjusted
                 else f"observed outflows / {stream_months:.2f} months{window_clause}"
             )
             if freq == "irregular"
@@ -757,6 +1345,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     "amount_observed": typical,
                     "frequency": freq,
                     "monthly_equivalent": round(monthly_equivalent(typical, freq if freq != "unknown" else "irregular"), 2),
+                    "regularity": _income_regularity(freq, len(rows)),
                     "evidence": ", ".join(sorted({r["date"] for r in rows})),
                 }
             )
@@ -816,11 +1405,24 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 line_include = False
             exclusion = ""
             if not line_include:
-                if business:
+                # Trading receipts are checked before the is_business branch:
+                # they are flagged is_business too, and "business /
+                # non-household" would describe them as spending.
+                if category == BUSINESS_RECEIPTS:
+                    exclusion = (
+                        r.get("reason")
+                        or "side-business gross receipts, not net profit"
+                    )
+                elif business:
                     why = r.get("business_reason") or "business / non-household"
                     exclusion = why if why.startswith("business") else f"business / non-household: {why}"
                 elif category in INCOME:
                     exclusion = "income"
+                elif category == "unclear":
+                    if not r.get("classified"):
+                        exclusion = "no classification joined"
+                    else:
+                        exclusion = r.get("reason") or "model low confidence / unclear"
                 elif freq == "one_off":
                     exclusion = "single observation - no cadence provable"
                 elif category in EXCLUSIONS:
@@ -833,6 +1435,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     "date": r["date"],
                     "description": r["description"],
                     "amount": r["amount"],
+                    "direction": r.get("direction") or "info",
                     "frequency": freq,
                     "include": "Yes" if line_include else "No",
                     "category": category,
@@ -840,8 +1443,13 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     "source_file": r.get("source_file"),
                     "account": acct.get("account_label") or acct.get("institution") or "Not provided in binder",
                     "exclusion_reason": exclusion,
-                    "needs_review": category in {"unclear", "underwriter_manual"}
-                    or business_flag in {"yes", "review"},
+                    "reason": r.get("reason") or "",
+                    "classified": bool(r.get("classified")),
+                    "merchant": r.get("merchant_normalized") or None,
+                    "confidence": r.get("confidence"),
+                    "subcategory": _closed_subcategory(r),
+                    "review_type": _review_type(category, business_flag),
+                    "needs_review": _review_type(category, business_flag) is not None,
                     "is_business": business_flag,
                 }
             )
@@ -855,6 +1463,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "date": r["date"],
                 "description": r["description"],
                 "amount": r["amount"],
+                "direction": r.get("direction") or "info",
                 "frequency": "one_off",
                 "include": "No",
                 "category": r.get("category"),
@@ -862,6 +1471,12 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "source_file": r.get("source_file"),
                 "account": acct.get("account_label") or acct.get("institution") or "Not provided in binder",
                 "exclusion_reason": "duplicate extraction (descriptions match after bank prefix/suffix strip)",
+                "reason": r.get("reason") or "",
+                "classified": bool(r.get("classified")),
+                "merchant": r.get("merchant_normalized") or None,
+                "confidence": r.get("confidence"),
+                "subcategory": _closed_subcategory(r),
+                "review_type": None,
                 "needs_review": True,
                 "is_business": r.get("is_business") or "no",
             }
@@ -934,6 +1549,63 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
     discretionary = round(category_monthly.get("recreation_entertainment", 0.0), 2)
     unclear_manual = sum(1 for r in joined if r["category"] in {"unclear", "underwriter_manual"})
     extraction_errors = canonical.get("errors") or []
+    applicant = canonical.get("applicant") or {
+        "Full Name(s)": "Not provided in binder",
+        "Age(s)": "Not provided in binder",
+        "Dependants": "Not provided in binder",
+        "Address and living situation": "Not provided in binder",
+    }
+    gaps = evidence_gaps(
+        joined, accounts, applicant, assessment_date, insurance_monthly, utility_monthly
+    )
+
+    # The trading receipts get a line of their own in Part 1.4, because an
+    # underwriter should not have to find $2,000 a month of business turnover
+    # by reading Part 5. It is one line, it says GROSS in the column a reader
+    # checks for gross-versus-net, and it is left out of
+    # audit.assessable_income_monthly - what a bank statement evidences here
+    # is money arriving, not profit, and servicing runs on profit.
+    trading = next(
+        (g for g in gaps if g["topic"] == "Unassessed receipts - possible trading income"),
+        None,
+    )
+    if trading:
+        credits = [
+            r for r in joined
+            if r.get("direction") == "inflow"
+            and r.get("category") in {BUSINESS_RECEIPTS, "unclear", "underwriter_manual"}
+            and 0 < abs(float(r.get("amount") or 0)) <= SIDE_INCOME_MAX_TICKET
+        ]
+        total = sum(abs(float(r.get("amount") or 0)) for r in credits)
+        months = _observation_months(accounts, credits)
+        payers = {str(r.get("merchant_normalized") or r.get("description") or "").strip().upper()
+                  for r in credits}
+        payers.discard("")
+        dates = sorted(str(r.get("date"))[:10] for r in credits)
+        income_rows.append({
+            "source": f"Side business (unassessed) - {len(payers)} payers",
+            "type": SIDE_INCOME_TYPE,
+            "amount_observed": round(total, 2),
+            "frequency": "irregular",
+            "monthly_equivalent": round(total / months, 2),
+            "regularity": _income_regularity("irregular", len(credits)),
+            "gross_net": (
+                "GROSS RECEIPTS - not net profit. Excluded from assessable income; "
+                "obtain business financials."
+            ),
+            "evidence": (
+                f"{len(credits)} credits, {dates[0]} to {dates[-1]}" if dates else "no dates"
+            ),
+        })
+
+    assessable_income_monthly = round(
+        sum(
+            float(r.get("monthly_equivalent") or 0)
+            for r in income_rows
+            if r.get("type") != SIDE_INCOME_TYPE
+        ),
+        2,
+    )
     underwriter_notes = [
         {"topic": "File quality", "note": f"{len(accounts)} statement records; {len(txns)} canonical rows; {len(extraction_errors)} extraction errors.", "requires_signoff": bool(extraction_errors)},
         {
@@ -952,7 +1624,84 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
         {"topic": "Liabilities", "note": f"{len(part4)} evidenced facilities; status: {liability_status}.", "requires_signoff": bool(part4)},
         {"topic": "Discretionary spend", "note": f"Recreation and entertainment monthly equivalent: {discretionary:.2f}.", "requires_signoff": discretionary > 0},
         {"topic": "Unclear/manual", "note": f"{unclear_manual} transactions require manual review or remain unclear.", "requires_signoff": unclear_manual > 0},
+        {
+            "topic": "Evidence gaps",
+            "note": (
+                f"{len(gaps)} evidence gap(s) detected - see the Evidence gaps block: "
+                + "; ".join(g["topic"] for g in gaps)
+                if gaps
+                else "No evidence gaps detected by the automated checks."
+            ),
+            "requires_signoff": bool(gaps),
+        },
     ]
+    # Info rows - opening balances, `Ref:` continuations, the international
+    # transaction fee lines - move no money and are deliberately kept off the
+    # classification worklist. Counting them as join misses reported 68
+    # unclassified rows on a file whose money rows were fully classified but
+    # two, and an underwriter reading that goes looking for a problem that is
+    # not there.
+    join_miss = sum(
+        1 for r in joined
+        if r["category"] == "unclear"
+        and not r.get("classified")
+        and r.get("direction") != "info"
+    )
+    model_unclear = sum(
+        1 for r in joined
+        if r["category"] == "unclear" and r.get("classified")
+    )
+    if join_miss or model_unclear:
+        underwriter_notes.append(
+            {
+                "topic": "Unclear sources",
+                "note": (
+                    f"{join_miss} join-miss (no classification); "
+                    f"{model_unclear} model unclear/low confidence."
+                ),
+                "requires_signoff": True,
+            }
+        )
+    unclear_in = [r for r in joined if r["category"] == "unclear" and r.get("direction") == "inflow"]
+    unclear_out = [r for r in joined if r["category"] == "unclear" and r.get("direction") == "outflow"]
+    if unclear_in or unclear_out:
+        in_sum = sum(abs(float(r.get("amount") or 0)) for r in unclear_in)
+        out_sum = sum(abs(float(r.get("amount") or 0)) for r in unclear_out)
+        underwriter_notes.append(
+            {
+                "topic": "Unclear by direction",
+                "note": (
+                    f"{len(unclear_in)} inflow ${in_sum:.2f}; "
+                    f"{len(unclear_out)} outflow ${out_sum:.2f}."
+                ),
+                "requires_signoff": True,
+            }
+        )
+    underwriter_notes.extend(rent_cadence_notes)
+    # The model answered is_business on every row and never once said yes,
+    # while leaving some rows unresolved. "Nothing was found" and "some rows
+    # could not be decided" print the same $0 in Part 1, so say which it is.
+    # Outflows only, to match BUSINESS EXPENSES itself: business_monthly sums
+    # spending. Side-business *receipts* are flagged is_business too, and
+    # counting those as evidence that business spend was assessed would
+    # silence this note in exactly the file that needs it.
+    _spend = [r for r in joined if r.get("direction") == "outflow"]
+    business_yes = sum(1 for r in _spend if r.get("is_business") == "yes")
+    business_review = sum(1 for r in _spend if r.get("is_business") == "review")
+    if not business_classification_missing and business_yes == 0 and business_review:
+        underwriter_notes.insert(
+            0,
+            {
+                "topic": "Business spend not resolved",
+                "note": (
+                    f"No row is marked as business spend, but {business_review} row(s) "
+                    f"came back unresolved. Business expenses report as 0.00 and every "
+                    f"unresolved row is inside recommended living. Zero here means "
+                    f"undecided, not absent."
+                ),
+                "requires_signoff": True,
+            },
+        )
     if business_classification_missing:
         underwriter_notes.insert(
             0,
@@ -967,14 +1716,9 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             },
         )
 
-    return {
+    result = {
         "assessment_date": assessment_date,
-        "applicant": canonical.get("applicant") or {
-            "Full Name(s)": "Not provided in binder",
-            "Age(s)": "Not provided in binder",
-            "Dependants": "Not provided in binder",
-            "Address and living situation": "Not provided in binder",
-        },
+        "applicant": applicant,
         "accounts": accounts,
         "document_index": canonical.get("document_index") or [
             {
@@ -1016,13 +1760,67 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 [{"merchant": m, "hits": n} for m, n in hits.items() if n >= 3],
                 key=lambda r: (-r["hits"], r["merchant"]),
             ),
+            "evidence_gaps": gaps,
             "underwriter_notes": underwriter_notes,
         },
         "audit": {
             "transaction_count": len(txns),
+            "assessable_income_monthly": assessable_income_monthly,
+            # What C9 actually wants to know. One merchant classification
+            # covers every row of that merchant, so comparing the number of
+            # classification objects against the number of transactions is a
+            # comparison between two different things - 238 merchants will
+            # never equal 611 rows. This counts rows that came out of the
+            # join with no classification at all.
+            "join_miss_rows": sum(
+                1 for r in joined
+                if not r.get("classified") and r.get("direction") != "info"
+            ),
+            "classified_rows": sum(1 for r in joined if r.get("classified")),
+            # Rows the model left out that merchant memory filled. Counted
+            # inside classified_rows; reported apart so a reader can see how
+            # much of the file rests on an earlier run rather than this one.
+            "memory_filled_rows": sum(
+                1 for r in joined
+                if r.get("classification_source") == "memory" and r.get("direction") != "info"
+            ),
+            # New payer names are deliberately not remembered. This is the
+            # generic inflow rule's contribution on the current binder.
+            "payer_name_filled_rows": sum(
+                1 for r in joined
+                if r.get("classification_source") == "payer_name"
+                and r.get("direction") != "info"
+            ),
+            # The names behind join_miss_rows, so a repair pass has something
+            # to act on after the HTTP layer drops part2. Capped; the count
+            # above stays authoritative.
+            "unclassified_merchants": unclassified_merchants(joined),
+            "unclassified_merchants_truncated": len(
+                {
+                    (
+                        str(r.get("merchant_normalized") or "").strip()
+                        or str(r.get("description") or "").strip(),
+                        str(r.get("direction") or "outflow"),
+                    )
+                    for r in joined
+                    if not r.get("classified") and r.get("direction") != "info"
+                }
+            ) > UNCLASSIFIED_MERCHANT_CAP,
+            "side_business_gross_monthly": round(
+                sum(
+                    float(r.get("monthly_equivalent") or 0)
+                    for r in income_rows
+                    if r.get("type") == SIDE_INCOME_TYPE
+                ),
+                2,
+            ),
             "info_rows_zeroed": sum(1 for t in txns if t.get("direction") == "info"),
             "rent_monthly": round(category_monthly.get("rent_board_paid", 0.0), 2),
             "is_business_classifications": n_explicit_business,
             "business_classification_missing": business_classification_missing,
         },
     }
+    from report_view_fields import build_observed_fields  # noqa: E402
+
+    result.update(build_observed_fields(canonical, joined, accounts, result))
+    return result

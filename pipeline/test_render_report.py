@@ -130,6 +130,9 @@ def test_renderer_writes_original_prompt_blocks():
     assert wb["Part4 Liabilities"]["A2"].value == "Westpac"
     assert wb["Part5 Commentary"]["B2"].value == 28800
     assert wb["Part5 Commentary"]["C2"].value == "rent_board_paid"
+    part2_headers = [c.value for c in wb["Part2 Line items"][1]]
+    assert "Direction" in part2_headers
+    assert part2_headers[part2_headers.index("Amount") + 1] == "Direction"
 
 
 def test_missing_is_business_warning_is_on_part5_not_only_json():
@@ -156,6 +159,35 @@ def test_missing_is_business_warning_is_on_part5_not_only_json():
     assert "is_business" in blob
 
 
+def test_part2_writes_direction_column():
+    summary = {
+        "assessment_date": "2026-09-01",
+        "part2": [
+            {
+                "date": "2026-07-02",
+                "description": "Direct Credit MISS Y ZHANG",
+                "amount": 40,
+                "direction": "inflow",
+                "frequency": "irregular",
+                "include": "No",
+                "category": "unclear",
+                "source_file": "ANZ.pdf",
+                "account": "ANZ",
+                "exclusion_reason": "unclear",
+                "needs_review": True,
+            }
+        ],
+        "part4": [],
+        "part5": {},
+    }
+    wb = load_workbook(BytesIO(build_workbook(summary)))
+    headers = [c.value for c in next(wb["Part2 Line items"].iter_rows(min_row=1, max_row=1))]
+    assert "Direction" in headers
+    assert headers.index("Direction") == headers.index("Amount") + 1
+    assert "Reason" in headers
+    assert wb["Part2 Line items"]["D2"].value == "inflow"
+
+
 def test_empty_part4_is_labelled_not_header_only():
     summary = {
         "assessment_date": "2026-09-01",
@@ -167,6 +199,74 @@ def test_empty_part4_is_labelled_not_header_only():
     assert "no liability evidence identified" in str(wb["Part4 Liabilities"]["A2"].value)
 
 
+def test_evidence_gaps_render_as_their_own_block_and_vanish_when_empty():
+    """The gaps block is written only when there are gaps to write.
+
+    An empty block would read as "checked, nothing found" in exactly the same
+    shape as "not checked at all", so absence has to mean absence.
+    """
+
+    gaps = [
+        {
+            "topic": "Account outside binder - ASB",
+            "note": "3 transaction(s) name ASB, which has no statement in this binder.",
+            "evidence": "2026-06-10 TFR TO ASB 300.00",
+            "requires_signoff": True,
+        },
+        {
+            "topic": "No power or gas in the file",
+            "note": "No electricity or gas retailer appears in 61 statement-days.",
+            "evidence": "no matching transactions",
+            "requires_signoff": True,
+        },
+    ]
+    summary = {"assessment_date": "2026-09-01", "part5": {"evidence_gaps": gaps}}
+    ws = load_workbook(BytesIO(build_workbook(summary)))["Part5 Commentary"]
+    rows = [[str(c.value or "") for c in row] for row in ws.iter_rows()]
+    blob = " ".join(" ".join(r) for r in rows)
+
+    header = next(r for r in rows if r and r[0] == "Evidence gaps")
+    assert header[1:4] == ["What is missing", "Evidence", "Requires sign-off"], header
+    assert "Account outside binder - ASB" in blob
+    assert "No power or gas in the file" in blob
+    assert "2026-06-10 TFR TO ASB 300.00" in blob
+    signoff = [r[3] for r in rows if r and r[0].startswith(("Account outside", "No power"))]
+    assert signoff == ["Yes", "Yes"], signoff
+
+    # Same renderer, no gaps: the block must not appear at all.
+    clean = {"assessment_date": "2026-09-01", "part5": {"evidence_gaps": []}}
+    ws2 = load_workbook(BytesIO(build_workbook(clean)))["Part5 Commentary"]
+    blob2 = " ".join(str(c.value or "") for row in ws2.iter_rows() for c in row)
+    assert "Evidence gaps" not in blob2, "empty gaps must not write a bare header"
+    assert "Underwriter audit notes" in blob2, "the rest of Part5 still renders"
+
+
+def test_income_sheet_labels_turnover_gross_and_prints_the_assessable_total():
+    summary = {
+        "assessment_date": "2026-09-01",
+        "income": [
+            {"source": "ACME", "type": "salary_wages", "amount_observed": 4000,
+             "frequency": "monthly", "monthly_equivalent": 4000, "evidence": "2026-06-03"},
+            {"source": "Side business (unassessed) - 14 payers",
+             "type": "side_business_gross_not_assessable", "amount_observed": 1400,
+             "frequency": "irregular", "monthly_equivalent": 463.44,
+             "gross_net": "GROSS RECEIPTS - not net profit. Excluded from assessable income; obtain business financials.",
+             "evidence": "14 credits, 2026-06-01 to 2026-06-27"},
+        ],
+        "audit": {"assessable_income_monthly": 4000, "side_business_gross_monthly": 463.44},
+        "part5": {},
+    }
+    ws = load_workbook(BytesIO(build_workbook(summary)))["1.4 Income"]
+    rows = [[str(c.value or "") for c in row] for row in ws.iter_rows()]
+    salary = next(r for r in rows if r[0] == "ACME")
+    assert salary[5] == "unknown", salary
+    side = next(r for r in rows if r[0].startswith("Side business"))
+    assert "GROSS RECEIPTS" in side[5], side
+    total = next(r for r in rows if r[0].startswith("ASSESSABLE INCOME"))
+    assert total[4] == "4000", total
+    assert "servicing" in total[5]
+
+
 if __name__ == "__main__":
     test_renderer_writes_original_prompt_blocks()
     print("ok test_renderer_writes_original_prompt_blocks")
@@ -174,4 +274,10 @@ if __name__ == "__main__":
     print("ok test_empty_part4_is_labelled_not_header_only")
     test_missing_is_business_warning_is_on_part5_not_only_json()
     print("ok test_missing_is_business_warning_is_on_part5_not_only_json")
+    test_part2_writes_direction_column()
+    print("ok test_part2_writes_direction_column")
+    test_evidence_gaps_render_as_their_own_block_and_vanish_when_empty()
+    print("ok test_evidence_gaps_render_as_their_own_block_and_vanish_when_empty")
+    test_income_sheet_labels_turnover_gross_and_prints_the_assessable_total()
+    print("ok test_income_sheet_labels_turnover_gross_and_prints_the_assessable_total")
     print("ALL PASS")

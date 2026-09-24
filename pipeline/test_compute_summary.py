@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.compute_summary import compute_summary, monthly_equivalent
+from pipeline.compute_summary import compute_summary, evidence_gaps, monthly_equivalent
 
 ASSESSMENT = "2026-08-31"
 
@@ -364,7 +364,23 @@ def test_mixed_amounts_use_dominant_cluster_not_median():
     )
     rent = out["audit"]["rent_monthly"]
     assert abs(rent - 1800) > 1, f"mixed median leaked: {rent}"
-    assert 2800 <= rent <= 3000, f"expected repeating $2880 rent, not window-average $4116, got {rent}"
+    assert abs(rent - 4116) > 50, f"extras monthlyised into run-rate: {rent}"
+    # The repeating charge is the rent. Four postings in 3.02 months could be a
+    # fortnightly tenancy, an arrears catch-up or a second property, and those
+    # do not service the same way - so the cadence becomes a question on Part 5
+    # rather than a $3,811 nobody can source.
+    assert rent == 2880, f"rent must stay the repeating amount, got {rent}"
+    cadence_notes = [
+        n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Rent cadence"
+    ]
+    assert cadence_notes, "irregular rent cadence must land a Part5 note"
+    note = cadence_notes[0]
+    assert note["requires_signoff"] is True
+    assert "4 times in 3.02 months" in note["note"], note["note"]
+    assert "3811" in note["note"], "the cadence reading must be shown, not hidden"
+    assert "4115" in note["note"] or "4116" in note["note"], "the run-rate must be shown too"
+    assert "2880" in note["note"], "the reported figure must be named"
+    assert "Confirm the contracted rent" in note["note"], note["note"]
 
 
 def test_same_day_salary_rows_merge_before_typical():
@@ -680,6 +696,610 @@ def test_variable_grocery_is_not_weeklyised_from_one_outlier():
     assert calc["assessed_frequency"] != "weekly" or calc["dominant_amount"] < 150
 
 
+def test_part2_exposes_direction_and_unclear_split():
+    txns = [
+        _txn("in1", "2026-07-02", "Direct Credit MISS Y ZHANG", 40, "inflow", "MISS Y ZHANG"),
+        _txn("out1", "2026-07-03", "PAY Xiuyuan zhang", 30, "outflow", "XIUYUAN ZHANG"),
+        _txn("rent1", "2026-07-04", "PAY Barfoot", 2880, "outflow", "BARFOOT"),
+    ]
+    cls = [
+        _cls("in1", "unclear", False),
+        _cls("out1", "unclear", False),
+        _cls("rent1", "rent_board_paid", True, "monthly"),
+    ]
+    out = compute_summary(
+        {"assessment_date": "2026-09-02", "accounts": [
+            {"account_id": "a1", "period_start": "2026-07-01", "period_end": "2026-07-31"}
+        ], "transactions": txns},
+        {"assessment_date": "2026-09-02", "classifications": cls},
+    )
+    by_id = {r["transaction_id"]: r for r in out["part2"]}
+    assert by_id["in1"]["direction"] == "inflow"
+    assert by_id["out1"]["direction"] == "outflow"
+    rent = next(r["monthly_equivalent"] for r in out["part1"] if r["category"] == "Rent / board paid")
+    assert rent == 2880
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear by direction")
+    assert "1 inflow $40.00" in note["note"]
+    assert "1 outflow $30.00" in note["note"]
+
+
+def test_unclear_reason_is_not_literal_and_sources_split():
+    txns = [
+        _txn("miss", "2026-07-02", "UNKNOWN MERCHANT XYZ", 12, "outflow", "UNKNOWN MERCHANT XYZ"),
+        _txn("low", "2026-07-03", "PAY Xiuyuan zhang", 30, "outflow", "XIUYUAN ZHANG"),
+        _txn("rent1", "2026-07-04", "PAY Barfoot", 2880, "outflow", "BARFOOT"),
+    ]
+    cls = [
+        _cls("low", "unclear", False, reason="person-name P2P, confidence 0.31"),
+        _cls("rent1", "rent_board_paid", True, "monthly"),
+    ]
+    out = compute_summary(
+        {"assessment_date": "2026-09-02", "accounts": [
+            {"account_id": "a1", "period_start": "2026-07-01", "period_end": "2026-07-31"}
+        ], "transactions": txns},
+        {"assessment_date": "2026-09-02", "classifications": cls},
+    )
+    by_id = {r["transaction_id"]: r for r in out["part2"]}
+    assert by_id["miss"]["classified"] is False
+    assert by_id["miss"]["exclusion_reason"] == "no classification joined"
+    assert by_id["low"]["classified"] is True
+    assert by_id["low"]["reason"] == "person-name P2P, confidence 0.31"
+    assert by_id["low"]["exclusion_reason"] == "person-name P2P, confidence 0.31"
+    assert by_id["low"]["exclusion_reason"] != "unclear"
+    rent = next(r["monthly_equivalent"] for r in out["part1"] if r["category"] == "Rent / board paid")
+    assert rent == 2880
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear sources")
+    assert "1 join-miss" in note["note"]
+    assert "1 model unclear" in note["note"]
+
+
+def _gap_topics(out):
+    return [g["topic"] for g in out["part5"]["evidence_gaps"]]
+
+
+def _rent_only_binder(extra_txns=None, extra_cls=None, applicant=None, accounts=None):
+    """Two months of rent and nothing else, plus whatever the caller adds.
+
+    The rent is the control: it is the one figure every gap test asserts stays
+    put, because a detection-only check that quietly moved rent would be the
+    exact failure these tests exist to catch.
+    """
+    txns = [
+        _txn("r1", "2026-06-04", "RENT A. LANDLORD", 2400, "outflow", "RENT LANDLORD"),
+        _txn("r2", "2026-07-04", "RENT A. LANDLORD", 2400, "outflow", "RENT LANDLORD"),
+    ]
+    cls = [
+        _cls("r1", "rent_board_paid", False, "monthly"),
+        _cls("r2", "rent_board_paid", False, "monthly"),
+    ]
+    canonical = {
+        "assessment_date": ASSESSMENT,
+        "accounts": accounts if accounts is not None else [
+            {"account_id": "a1", "institution": "ANZ",
+             "period_start": "2026-06-01", "period_end": "2026-07-31", "days_covered": 61}
+        ],
+        "transactions": txns + list(extra_txns or []),
+    }
+    if applicant is not None:
+        canonical["applicant"] = applicant
+    return canonical, {
+        "assessment_date": ASSESSMENT,
+        "classifications": cls + list(extra_cls or []),
+    }
+
+
+def test_evidence_gaps_five_families_do_not_move_money():
+    """All five gap families fire at once and not one cent moves."""
+
+    control_out = compute_summary(*_rent_only_binder())
+
+    # (a) names ASB, which has no statement here. (b) a school payment while
+    # Dependants is unrecorded. (c) NZTA with no vehicle insurer anywhere.
+    # (d) no energy retailer in the whole file. (e) a Wise transfer out, over
+    # the threshold, inside the window before the assessment date.
+    extra_txns = [
+        _txn("g1", "2026-06-10", "TFR TO ASB 12-3456-0000001-00", 300, "outflow", "ASB TRANSFER"),
+        _txn("g2", "2026-06-12", "WAIRAU INTERMEDIATE SCHOOL", 180, "outflow", "WAIRAU INTERMEDIATE SCHOOL"),
+        _txn("g3", "2026-06-14", "NZ TRANSPORT AGENCY REGO", 113.94, "outflow", "NZ TRANSPORT AGENCY"),
+        _txn("g4", "2026-08-20", "WISE NZ TRANSFER", 3000, "outflow", "WISE"),
+    ]
+    extra_cls = [
+        _cls("g1", "unclear", False, "one_off"),
+        _cls("g2", "unclear", False, "one_off"),
+        _cls("g3", "unclear", False, "one_off"),
+        _cls("g4", "unclear", False, "one_off"),
+    ]
+    out = compute_summary(*_rent_only_binder(extra_txns, extra_cls))
+    topics = _gap_topics(out)
+
+    assert len(topics) == 5, f"expected all five gap families, got {topics}"
+    assert any(t.startswith("Account outside binder") and "ASB" in t for t in topics), topics
+    assert "Dependants not recorded" in topics, topics
+    assert "Vehicle costs without vehicle insurance" in topics, topics
+    assert "No power or gas in the file" in topics, topics
+    assert "Large offshore transfer before assessment" in topics, topics
+
+    # The whole point of T-04: detection only.
+    assert out["audit"]["rent_monthly"] == 2400, out["audit"]["rent_monthly"]
+    assert out["audit"]["rent_monthly"] == control_out["audit"]["rent_monthly"]
+    assert out["recommended_monthly_living"] == control_out["recommended_monthly_living"], (
+        f"gaps moved recommended {control_out['recommended_monthly_living']} "
+        f"-> {out['recommended_monthly_living']}"
+    )
+    # Every Part 1 line is untouched. The one row that legitimately differs is
+    # TOTAL ONE-OFF EXCLUDED, which is a raw sum of the rows the caller added -
+    # and its value proves the gap-triggering spend landed in the excluded
+    # bucket rather than in anybody's living expenses.
+    def _part1(summary):
+        return {
+            r["category"]: r["monthly_equivalent"]
+            for r in summary["part1"]
+            if r["category"] != "TOTAL ONE-OFF EXCLUDED"
+        }
+    assert _part1(out) == _part1(control_out), (
+        f"gaps changed Part 1: {_part1(control_out)} -> {_part1(out)}"
+    )
+    one_off = next(
+        r["monthly_equivalent"] for r in out["part1"]
+        if r["category"] == "TOTAL ONE-OFF EXCLUDED"
+    )
+    assert one_off == round(300 + 180 + 113.94 + 3000, 2), one_off
+
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Evidence gaps")
+    assert note["requires_signoff"] is True
+    assert "5 evidence gap(s)" in note["note"], note["note"]
+
+
+def test_evidence_gap_skips_banks_already_in_the_binder():
+    """A transfer naming a bank whose statement IS here is not a gap."""
+
+    extra_txns = [_txn("b1", "2026-06-10", "TFR TO ANZ 06-0081-0097480-00", 300, "outflow", "ANZ TRANSFER")]
+    extra_cls = [_cls("b1", "unclear", False, "one_off")]
+    out = compute_summary(*_rent_only_binder(extra_txns, extra_cls))
+    topics = _gap_topics(out)
+    assert not any("ANZ" in t for t in topics), f"ANZ is in the binder, not a gap: {topics}"
+
+
+def test_evidence_gaps_stay_quiet_when_the_binder_answers_them():
+    """Dependants recorded, vehicle insured, power paid, no offshore transfer."""
+
+    extra_txns = [
+        _txn("e1", "2026-06-05", "MERIDIAN ENERGY", 180.4, "outflow", "MERIDIAN ENERGY"),
+        _txn("e2", "2026-07-05", "MERIDIAN ENERGY", 180.4, "outflow", "MERIDIAN ENERGY"),
+        _txn("v1", "2026-06-14", "NZ TRANSPORT AGENCY REGO", 113.94, "outflow", "NZ TRANSPORT AGENCY"),
+        _txn("i1", "2026-06-06", "AA INSURANCE", 62.1, "outflow", "AA INSURANCE"),
+        _txn("i2", "2026-07-06", "AA INSURANCE", 62.1, "outflow", "AA INSURANCE"),
+    ]
+    extra_cls = [
+        _cls("e1", "utilities", True, "monthly", subtype="power"),
+        _cls("e2", "utilities", True, "monthly", subtype="power"),
+        _cls("v1", "transport", True, "one_off"),
+        _cls("i1", "insurance", True, "monthly", subtype="vehicle"),
+        _cls("i2", "insurance", True, "monthly", subtype="vehicle"),
+    ]
+    applicant = {
+        "Full Name(s)": "Alex Taylor",
+        "Age(s)": "41",
+        "Dependants": "2",
+        "Address and living situation": "12 Example Street, Wellington 6011 (Renting)",
+    }
+    out = compute_summary(*_rent_only_binder(extra_txns, extra_cls, applicant=applicant))
+    topics = _gap_topics(out)
+    assert topics == [], f"clean binder should report no gaps, got {topics}"
+    note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Evidence gaps")
+    assert note["requires_signoff"] is False
+    assert "No evidence gaps" in note["note"], note["note"]
+
+
+def test_evidence_gaps_survive_a_malformed_transaction_date():
+    """An unreadable date drops that row from the check, it does not raise.
+
+    Called against evidence_gaps directly: the surrounding engine has its own
+    date handling, and this asserts only that the gap checks are not the thing
+    that turns a bad row into a failed assessment.
+    """
+
+    rows = [
+        {"date": "not-a-date", "description": "WISE NZ TRANSFER", "merchant_normalized": "WISE",
+         "amount": 3000, "direction": "outflow"},
+        {"date": "2026-08-20", "description": "WISE NZ TRANSFER", "merchant_normalized": "WISE",
+         "amount": 3000, "direction": "outflow"},
+    ]
+    accounts = [{"account_id": "a1", "institution": "ANZ", "days_covered": 61}]
+    applicant = {"Dependants": "2"}
+    gaps = evidence_gaps(rows, accounts, applicant, ASSESSMENT, {"vehicle": 62.1}, {"power": 180.4})
+    topics = [g["topic"] for g in gaps]
+    assert "Large offshore transfer before assessment" in topics, topics
+    offshore = next(g for g in gaps if g["topic"] == "Large offshore transfer before assessment")
+    assert "3000.00" in offshore["evidence"], offshore["evidence"]
+    assert "not-a-date" not in offshore["evidence"], offshore["evidence"]
+    assert "1 remittance(s)" in offshore["note"], offshore["note"]
+
+
+def test_evidence_gaps_note_appears_exactly_once():
+    """One finding, one line.
+
+    The merge that brought T-04's gap checks onto the T-02 branch left the
+    Evidence gaps underwriter note being appended twice, so Part 5 showed the
+    same sign-off item in two places. An underwriter reading two identical
+    lines has to work out whether they are two findings.
+    """
+
+    out = compute_summary(*_rent_only_binder())
+    topics = [n["topic"] for n in out["part5"]["underwriter_notes"]]
+    assert topics.count("Evidence gaps") == 1, topics
+
+
+def test_many_small_credits_from_many_payers_are_flagged_as_possible_trading():
+    """Trading receipts are named as turnover, and no money moves.
+
+    Shape-based on purpose: the check counts payers and ticket sizes rather
+    than deciding which descriptions are personal names. Applied to this
+    applicant's file that distinction matters - a name heuristic put a
+    coworking provider and a currency-conversion line in the person bucket.
+    """
+
+    txns, cls = [], []
+    for i in range(14):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 40 + i, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    gaps = {g["topic"]: g for g in out["part5"]["evidence_gaps"]}
+    topic = "Unassessed receipts - possible trading income"
+    assert topic in gaps, list(gaps)
+    note = gaps[topic]["note"]
+    assert "14 credit(s)" in note, note
+    assert "14 different payers" in note, note
+    assert "turnover and not profit" in note, note
+
+    control = compute_summary(*_rent_only_binder())
+    assert out["audit"]["rent_monthly"] == control["audit"]["rent_monthly"] == 2400
+    assert out["recommended_monthly_living"] == control["recommended_monthly_living"]
+    assert not any(r["category"] == "Other" and r["monthly_equivalent"] for r in out["part1"])
+
+
+def test_one_regular_payer_is_not_a_business():
+    """Board from a single flatmate must not read as trading receipts."""
+
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"b{i}", f"2026-06-{(i % 27) + 1:02d}", "A FLATMATE", 200, "inflow", "A FLATMATE"))
+        cls.append(_cls(f"b{i}", "unclear", False, "weekly"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    topics = [g["topic"] for g in out["part5"]["evidence_gaps"]]
+    assert "Unassessed receipts - possible trading income" not in topics, topics
+
+
+def test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero():
+    """0 business spend must not read the same as 'we could not decide'."""
+
+    txns = [
+        _txn("w1", "2026-06-10", "SOME SUPPLIER", 300, "outflow", "SOME SUPPLIER"),
+        _txn("w2", "2026-07-10", "SOME SUPPLIER", 300, "outflow", "SOME SUPPLIER"),
+    ]
+    cls = [
+        _cls("w1", "monthly_subscriptions", True, "monthly", is_business="review"),
+        _cls("w2", "monthly_subscriptions", True, "monthly", is_business="no"),
+    ]
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert out["business_monthly"] == 0
+    note = next(
+        (n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Business spend not resolved"),
+        None,
+    )
+    assert note is not None, [n["topic"] for n in out["part5"]["underwriter_notes"]]
+    assert note["requires_signoff"] is True
+    assert "1 row(s) came back unresolved" in note["note"], note["note"]
+    assert "undecided, not absent" in note["note"], note["note"]
+
+    # Every row decided and none of them business: that IS a clean zero.
+    clean_cls = [
+        _cls("w1", "monthly_subscriptions", True, "monthly", is_business="no"),
+        _cls("w2", "monthly_subscriptions", True, "monthly", is_business="no"),
+    ]
+    clean = compute_summary(*_rent_only_binder(txns, clean_cls))
+    assert not any(
+        n["topic"] == "Business spend not resolved" for n in clean["part5"]["underwriter_notes"]
+    )
+
+
+def test_trading_turnover_uses_the_span_not_the_sum_of_statement_days():
+    """Overlapping statements must not stretch the window and shrink the rate.
+
+    ANZ 61 days sitting inside Kiwibank 92 days is a three-month file, not a
+    five-month one. Summing days_covered divided this applicant's turnover by
+    5.03 instead of 3.02 and reported 1,310/month for what is 2,180/month -
+    an error that made the side business look smaller than it is.
+    """
+
+    accounts = [
+        {"account_id": "a1", "institution": "Kiwibank", "period_start": "2026-05-20",
+         "period_end": "2026-08-19", "days_covered": 92},
+        {"account_id": "a2", "institution": "ANZ", "period_start": "2026-06-20",
+         "period_end": "2026-08-19", "days_covered": 61},
+    ]
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i}", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off"))
+    out = compute_summary(*_rent_only_binder(txns, cls, accounts=accounts))
+    gap = next(g for g in out["part5"]["evidence_gaps"]
+               if g["topic"] == "Unassessed receipts - possible trading income")
+    # 1,200 over the 92-day span is 397.00/month; over a summed 153 days it
+    # would read 238.75 and understate the business by a third.
+    assert "397.00/month" in gap["note"], gap["note"]
+    assert "238" not in gap["note"], gap["note"]
+
+
+def test_business_receipts_do_not_silence_the_unresolved_spend_note():
+    """Tagging income as business must not count as assessing business spend.
+
+    The classifier marks side-business receipts is_business=yes. Counting
+    those would make the file look as though business spend had been
+    assessed, and the note would go quiet on exactly the binder that needs
+    it - a side business whose costs are still sitting in living expenses.
+    """
+
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off", is_business="yes"))
+    txns.append(_txn("s1", "2026-06-15", "IWG NEW ZEALAND", 616.4, "outflow", "IWG NEW ZEALAND"))
+    cls.append(_cls("s1", "monthly_subscriptions", True, "monthly", is_business="review"))
+
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    note = next(
+        (n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Business spend not resolved"),
+        None,
+    )
+    assert note is not None, [n["topic"] for n in out["part5"]["underwriter_notes"]]
+    assert "1 row(s) came back unresolved" in note["note"], note["note"]
+    assert out["business_monthly"] == 0
+
+
+def test_trading_turnover_gets_its_own_income_line_outside_assessable_income():
+    """Visible in Part 1.4, and left out of the number servicing runs on."""
+
+    txns, cls = [], []
+    for i in range(14):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "unclear", False, "one_off"))
+    txns.append(_txn("w1", "2026-06-03", "SALARY ACME", 4000, "inflow", "ACME"))
+    txns.append(_txn("w2", "2026-07-03", "SALARY ACME", 4000, "inflow", "ACME"))
+    cls.append(_cls("w1", "salary_wages", False, "monthly"))
+    cls.append(_cls("w2", "salary_wages", False, "monthly"))
+
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    side = [r for r in out["income"] if r["type"] == "side_business_gross_not_assessable"]
+    assert len(side) == 1, [r["type"] for r in out["income"]]
+    row = side[0]
+    assert row["amount_observed"] == 1400
+    assert "GROSS RECEIPTS" in row["gross_net"], row["gross_net"]
+    assert "not net profit" in row["gross_net"]
+    assert "14 payers" in row["source"], row["source"]
+
+    # The turnover is reported and then kept out of the servicing figure.
+    assert out["audit"]["side_business_gross_monthly"] == row["monthly_equivalent"]
+    assert out["audit"]["assessable_income_monthly"] == 4000, out["audit"]
+    assert row["monthly_equivalent"] > 0
+
+
+def test_no_side_business_line_when_there_is_no_trading_shape():
+    """One payer is not a business, so Part 1.4 gains nothing."""
+
+    txns, cls = [], []
+    for i in range(12):
+        txns.append(_txn(f"b{i}", f"2026-06-{(i % 27) + 1:02d}", "A FLATMATE", 200, "inflow", "A FLATMATE"))
+        cls.append(_cls(f"b{i}", "unclear", False, "weekly"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert not [r for r in out["income"] if r["type"] == "side_business_gross_not_assessable"]
+    assert out["audit"]["side_business_gross_monthly"] == 0
+
+
+def test_audit_counts_join_misses_not_classification_objects():
+    """C9 needs rows that resolved, not the size of the classifications list.
+
+    One merchant entry classifies every row of that merchant, so a binder of
+    611 rows is legitimately covered by 238 objects. Comparing those two
+    numbers fails a correct run every time; counting unresolved rows does not.
+    """
+
+    txns = [
+        _txn("m1", "2026-06-04", "PAK N SAVE W", 80, "outflow", "PAK N SAVE W"),
+        _txn("m2", "2026-06-11", "PAK N SAVE W", 90, "outflow", "PAK N SAVE W"),
+        _txn("m3", "2026-06-18", "PAK N SAVE W", 85, "outflow", "PAK N SAVE W"),
+        _txn("x1", "2026-06-20", "SOMETHING UNSEEN", 40, "outflow", "SOMETHING UNSEEN"),
+    ]
+    # One merchant-keyed classification for three rows, and nothing for x1.
+    cls = [{
+        "merchant": "PAK N SAVE W",
+        "category": "food_grocery_clothing_personal_care",
+        "include_in_living_expenses": True,
+        "confidence": 0.9,
+        "reason": "supermarket",
+        "suggested_frequency": "weekly",
+    }]
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    audit = out["audit"]
+    assert audit["join_miss_rows"] == 1, audit
+    assert audit["classified_rows"] == 3 + 2, audit  # 3 grocery + 2 rent rows
+    # The naive C9 comparison would have failed this correct run.
+    assert len(cls) != len(txns)
+
+
+def test_business_receipts_are_their_own_category_not_unclear():
+    """A row we identified must not be filed under "we could not tell".
+
+    Calling side-business takings `unclear` put 150 identified rows in the
+    same bucket as genuinely unknown ones, so the file read as though nobody
+    had classified them. They get their own category: outside income, because
+    a statement cannot evidence profit, and outside living expenses, because
+    they are money coming in.
+    """
+
+    txns, cls = [], []
+    for i in range(14):
+        txns.append(_txn(f"c{i}", f"2026-06-{(i % 27) + 1:02d}", f"PAYER {i} bun", 100, "inflow", f"PAYER {i}"))
+        cls.append(_cls(f"c{i}", "business_receipts", False, "irregular",
+                        reason="side-business gross receipts, not net profit",
+                        is_business="yes"))
+    out = compute_summary(*_rent_only_binder(txns, cls))
+
+    rows = [r for r in out["part2"] if r["category"] == "business_receipts"]
+    assert len(rows) == 14, [r["category"] for r in out["part2"]]
+    assert all(r["include"] == "No" for r in rows)
+    assert all("not net profit" in (r["exclusion_reason"] or "") for r in rows), rows[0]
+    assert not [r for r in out["part2"] if r["category"] == "unclear"]
+
+    # Outside income, outside living, still surfaced.
+    assert out["audit"]["assessable_income_monthly"] == 0
+    assert out["audit"]["side_business_gross_monthly"] > 0
+    assert out["audit"]["rent_monthly"] == 2400
+    assert out["recommended_monthly_living"] == 2400
+    assert any(
+        g["topic"] == "Unassessed receipts - possible trading income"
+        for g in out["part5"]["evidence_gaps"]
+    )
+    side = [r for r in out["income"] if r["type"] == "side_business_gross_not_assessable"]
+    assert len(side) == 1 and side[0]["amount_observed"] == 1400
+
+
+def test_one_payer_many_spellings_joins_to_one_classification():
+    """The statement spells a payer four ways; the model claims one.
+
+    "MISS Y ZHANG a", "Direct Credit MISS Y ZHANG" and "MISS Y ZHANG BILL
+    PAYMENT" are one person. Exact-match keying claimed the first and left
+    the rest as "no classification joined" - 145 rows on this applicant's
+    file. The wider key is used only to attach a classification to a row.
+    """
+
+    from pipeline.compute_summary import merchant_join_key
+
+    assert merchant_join_key("MISS Y ZHANG a") == "MISS Y ZHANG"
+    assert merchant_join_key("Direct Credit MISS Y ZHANG") == "MISS Y ZHANG"
+    assert merchant_join_key("MISS Y ZHANG BILL PAYMENT") == "MISS Y ZHANG"
+    # A surname the statement happened to lower-case is not an alias.
+    assert merchant_join_key("PAY Xiuyuan zhang") == "XIUYUAN ZHANG"
+
+    txns, cls = [], []
+    spellings = [
+        "MISS Y ZHANG a",
+        "Direct Credit MISS Y ZHANG",
+        "MISS Y ZHANG BILL PAYMENT",
+        "MISS Y ZHANG a",
+    ]
+    for i, desc in enumerate(spellings):
+        txns.append(_txn(f"z{i}", f"2026-06-{i + 4:02d}", desc, 40, "inflow", desc))
+        # No per-row classification: only the merchant-level one below.
+    cls.append({
+        "merchant": "MISS Y ZHANG a",
+        "category": "business_receipts",
+        "include_in_living_expenses": False,
+        "confidence": 0.9,
+        "reason": "side-business gross receipts, not net profit",
+        "suggested_frequency": "irregular",
+        "is_business": "yes",
+    })
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert out["audit"]["join_miss_rows"] == 0, [
+        (r["description"], r["exclusion_reason"]) for r in out["part2"]
+    ]
+    assert all(
+        r["category"] == "business_receipts"
+        for r in out["part2"]
+        if "ZHANG" in r["description"].upper()
+    )
+
+
+def test_different_people_are_not_merged_by_the_join_key():
+    """Two payers who share a surname stay two payers."""
+
+    from pipeline.compute_summary import merchant_join_key
+
+    assert merchant_join_key("ZHANG,MENG Menglich") != merchant_join_key("ZHANG,FAN BILL PAYMENT")
+    assert merchant_join_key("FROM J ZHANG") != merchant_join_key("Direct Credit MISS Y ZHANG")
+
+    txns = [
+        _txn("a1", "2026-06-04", "ZHANG,MENG Menglich", 60, "inflow", "ZHANG,MENG Menglich"),
+        _txn("b1", "2026-06-05", "ZHANG,FAN BILL PAYMENT", 40, "inflow", "ZHANG,FAN BILL PAYMENT"),
+    ]
+    cls = [{
+        "merchant": "ZHANG,MENG Menglich",
+        "category": "business_receipts",
+        "include_in_living_expenses": False,
+        "confidence": 0.9,
+        "reason": "side-business gross receipts, not net profit",
+        "suggested_frequency": "irregular",
+    }]
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    by_desc = {r["description"]: r for r in out["part2"]}
+    assert by_desc["ZHANG,MENG Menglich"]["category"] == "business_receipts"
+    # Both land on business_receipts now, so category can no longer show
+    # whether the join leaked. The reason can: MENG carries what the model
+    # said, FAN carries what payer_classification said. A leak would put
+    # the model's own wording on a row the model never classified.
+    assert by_desc["ZHANG,MENG Menglich"]["reason"] == (
+        "side-business gross receipts, not net profit"
+    )
+    fan = by_desc["ZHANG,FAN BILL PAYMENT"]
+    assert fan["category"] == "business_receipts", fan
+    assert fan["reason"].startswith("payer name:"), fan
+    assert fan["reason"] != by_desc["ZHANG,MENG Menglich"]["reason"], fan
+
+
+def test_the_wider_join_key_moves_no_money():
+    """Same input, same totals - the key only decides what gets a label."""
+
+    txns, cls = [], []
+    for i, desc in enumerate(["MISS Y ZHANG a", "Direct Credit MISS Y ZHANG"]):
+        txns.append(_txn(f"z{i}", f"2026-06-{i + 4:02d}", desc, 40, "inflow", desc))
+    control = compute_summary(*_rent_only_binder(txns, cls))
+    cls.append({
+        "merchant": "MISS Y ZHANG",
+        "category": "business_receipts",
+        "include_in_living_expenses": False,
+        "confidence": 0.9,
+        "reason": "side-business gross receipts, not net profit",
+        "suggested_frequency": "irregular",
+    })
+    out = compute_summary(*_rent_only_binder(txns, cls))
+    assert out["audit"]["rent_monthly"] == control["audit"]["rent_monthly"] == 2400
+    assert out["recommended_monthly_living"] == control["recommended_monthly_living"]
+    # The control used to show 2 join misses. payer_classification answers
+    # a person-name inflow without the model, so both runs now join fully -
+    # which is the stronger form of the same claim: the wider key changed
+    # no total, and neither did the rule that made the misses go away.
+    assert out["audit"]["join_miss_rows"] == 0, out["audit"]["join_miss_rows"]
+    assert control["audit"]["join_miss_rows"] == 0, control["audit"]["join_miss_rows"]
+    assert {r["category"] for r in control["part2"] if r["direction"] == "inflow"} == {
+        "business_receipts"
+    }
+
+
+def test_info_rows_are_not_counted_as_unclassified():
+    """A balance line was never on the worklist, so it is not a join miss.
+
+    C9 keys off join_miss_rows and Part 5 prints it. Counting info rows put
+    "68 join-miss (no classification)" on a file whose money rows were fully
+    classified but two - a number that sends an underwriter hunting for
+    nothing.
+    """
+
+    txns = [
+        _txn("i1", "2026-06-01", "Opening balance", 0, "info", "OPENING BALANCE"),
+        _txn("i2", "2026-06-02", "Ref: 33GYM W2MHWQ 9", 0, "info", "REF"),
+        _txn("m1", "2026-06-03", "SOMETHING UNSEEN", 40, "outflow", "SOMETHING UNSEEN"),
+    ]
+    out = compute_summary(*_rent_only_binder(txns, []))
+    assert out["audit"]["join_miss_rows"] == 1, out["audit"]
+    note = next(
+        (n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear sources"),
+        None,
+    )
+    assert note is not None
+    assert "1 join-miss" in note["note"], note["note"]
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -702,6 +1322,26 @@ if __name__ == "__main__":
         test_missing_is_business_is_a_visible_warning_not_a_clean_zero,
         test_extract_duplicate_is_dropped_genuine_repeats_sum,
         test_variable_grocery_is_not_weeklyised_from_one_outlier,
+        test_part2_exposes_direction_and_unclear_split,
+        test_unclear_reason_is_not_literal_and_sources_split,
+        test_evidence_gaps_five_families_do_not_move_money,
+        test_evidence_gap_skips_banks_already_in_the_binder,
+        test_evidence_gaps_stay_quiet_when_the_binder_answers_them,
+        test_evidence_gaps_survive_a_malformed_transaction_date,
+        test_evidence_gaps_note_appears_exactly_once,
+        test_many_small_credits_from_many_payers_are_flagged_as_possible_trading,
+        test_one_regular_payer_is_not_a_business,
+        test_trading_turnover_uses_the_span_not_the_sum_of_statement_days,
+        test_zero_business_rows_with_unresolved_ones_is_not_a_clean_zero,
+        test_business_receipts_do_not_silence_the_unresolved_spend_note,
+        test_trading_turnover_gets_its_own_income_line_outside_assessable_income,
+        test_no_side_business_line_when_there_is_no_trading_shape,
+        test_audit_counts_join_misses_not_classification_objects,
+        test_info_rows_are_not_counted_as_unclassified,
+        test_business_receipts_are_their_own_category_not_unclear,
+        test_one_payer_many_spellings_joins_to_one_classification,
+        test_different_people_are_not_merged_by_the_join_key,
+        test_the_wider_join_key_moves_no_money,
     ]
     for fn in tests:
         fn()

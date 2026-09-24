@@ -84,6 +84,10 @@ cs_props = (
 )
 check("compute accepts batch_id", "batch_id" in cs_props, ", ".join(sorted(cs_props)))
 check("compute still accepts canonical for scripts", "canonical" in cs_props)
+check("compute advertises include_part2", "include_part2" in cs_props)
+check("compute advertises include_report_view", "include_report_view" in cs_props)
+check("compute advertises include_part3", "include_part3" in cs_props)
+check("compute advertises include_full_summary", "include_full_summary" in cs_props)
 
 cs_resp = (
     spec["paths"]["/compute_summary"]["post"]["responses"]["200"]["content"]
@@ -97,6 +101,12 @@ rr_props = (
 )
 check("render accepts summary_id", "summary_id" in rr_props, ", ".join(sorted(rr_props)))
 check("render still accepts summary for scripts", "summary" in rr_props)
+check("render advertises format", "format" in rr_props, ", ".join(sorted(rr_props)))
+check(
+    "render format is xlsx|html|both",
+    set(rr_props.get("format", {}).get("enum") or []) == {"xlsx", "html", "both"},
+    str(rr_props.get("format", {}).get("enum")),
+)
 
 print("\n== the server URL is the live Function App ==")
 url = spec["servers"][0]["url"]

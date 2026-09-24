@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "scope": "statement",
+    "report_title": "Bank Statement Analysis Report",
+    "source_files": ["FAKE-westpac-statement.pdf"],
+    "institutions": ["Westpac"],
+    "masked_account": "••••1234",
+    "period_start": "2026-08-01",
+    "period_end": "2026-08-31",
+    "generated_at": "2026-09-21T12:00:00+12:00",
+    "accounts": [
+      {
+        "account_id": "acct-1",
+        "institution": "Westpac",
+        "masked_account": "••••1234",
+        "period_start": "2026-08-01",
+        "period_end": "2026-08-31",
+        "opening_balance_nzd": 1000.0,
+        "closing_balance_nzd": 4000.0,
+        "source_files": ["FAKE-westpac-statement.pdf"]
+      }
+    ]
+  },
+  "observed_cashflow": {
+    "total_inflows_nzd": 5000.0,
+    "total_outflows_nzd": 2000.0,
+    "net_movement_nzd": 3000.0,
+    "observation_months": 1.0,
+    "reconciliations": [
+      {
+        "account_id": "acct-1",
+        "status": "balanced",
+        "opening_balance_nzd": 1000.0,
+        "total_inflows_nzd": 5000.0,
+        "total_outflows_nzd": 2000.0,
+        "expected_closing_balance_nzd": 4000.0,
+        "reported_closing_balance_nzd": 4000.0,
+        "difference_nzd": 0.0
+      }
+    ]
+  },
+  "servicing": {
+    "assessable_income_monthly_nzd": 5000.0,
+    "recommended_living_monthly_nzd": 2000.0,
+    "savings_giving_monthly_nzd": 0.0,
+    "business_expenses_monthly_nzd": 0.0,
+    "side_business_gross_monthly_nzd": 0.0
+  },
+  "category_breakdown": {
+    "denominator_nzd": 2000.0,
+    "denominator_policy": "observed_household_outflows",
+    "essential_percent": 100.0,
+    "discretionary_percent": 0.0,
+    "rows": [
+      {
+        "category": "food_grocery_clothing_personal_care",
+        "label": "Food, Grocery, Clothing & Personal Care",
+        "observed_total_nzd": 2000.0,
+        "monthly_equivalent_nzd": 2000.0,
+        "percent_of_denominator": 100.0,
+        "policy_bucket": "essential",
+        "essential": true
+      }
+    ]
+  },
+  "income_sources": [
+    {
+      "source": "FAKE EMPLOYER",
+      "income_type": "salary_wages",
+      "dominant_amount_nzd": 2307.69,
+      "frequency": "fortnightly",
+      "monthly_equivalent_nzd": 5000.0,
+      "regularity": "regular",
+      "evidence": "2026-08-07, 2026-08-21"
+    }
+  ],
+  "recurring_commitments": [
+    {
+      "merchant": "FAKE GROCER",
+      "category": "food_grocery_clothing_personal_care",
+      "dominant_amount_nzd": 461.54,
+      "frequency": "weekly",
+      "monthly_impact_nzd": 2000.0,
+      "essential": true
+    }
+  ],
+  "risk_flags": {
+    "count": 1,
+    "rows": [
+      {
+        "transaction_id": "txn-cash-1",
+        "date": "2026-08-18",
+        "description": "ATM W/D",
+        "amount_nzd": 600.0,
+        "rule_id": "cash_withdrawal_over_500",
+        "severity": "review",
+        "reason": "Single cash withdrawal exceeds NZD 500."
+      }
+    ]
+  },
+  "manual_review": {
+    "unclear": [
+      {
+        "review_type": "unclear",
+        "transaction_id": "txn-unclear-1",
+        "date": "2026-08-20",
+        "description": "PAYPAL *TRUNCATED",
+        "amount_nzd": 20.0,
+        "reason": "Merchant purpose is not printed.",
+        "confidence": 0.4
+      }
+    ],
+    "underwriter_manual": [
+      {
+        "review_type": "underwriter_manual",
+        "transaction_id": "txn-rates-1",
+        "date": "2026-08-22",
+        "description": "COUNCIL RATES",
+        "amount_nzd": 100.0,
+        "reason": "Council rates require underwriter assessment.",
+        "confidence": 1.0
+      }
+    ],
+    "business_review": [
+      {
+        "review_type": "business_review",
+        "transaction_id": "txn-supplier-1",
+        "date": "2026-08-24",
+        "description": "WHOLESALE SUPPLIER",
+        "amount_nzd": 300.0,
+        "reason": "Supplier spend has insufficient business context.",
+        "confidence": 0.7
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "transaction_id": "txn-grocery-1",
+      "date": "2026-08-04",
+      "description": "FAKE GROCER STORE 001",
+      "amount_nzd": 461.54,
+      "direction": "outflow",
+      "category": "food_grocery_clothing_personal_care",
+      "source_file": "FAKE-westpac-statement.pdf",
+      "merchant": "FAKE GROCER",
+      "confidence": 0.98,
+      "subcategory": null,
+      "vendor_source": "pattern",
+      "vendor_source_url": null
+    }
+  ],
+  "exceptions": [
+    {
+      "type": "missing_evidence",
+      "severity": "review",
+      "description": "Applicant dependants were not provided in the binder.",
+      "evidence": "No matching applicant field in extracted documents."
+    }
+  ]
+}

@@ -26,6 +26,8 @@ from compute_summary import (  # noqa: F401,E402  - explicit for static checkers
     EXCLUSIONS,
     compute_summary,
     detect_frequency,
+    evidence_gaps,
+    merchant_join_key,
     monthly_equivalent,
     parse_date,
 )

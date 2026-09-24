@@ -20,3 +20,10 @@ fixtures/samples/
 *.xlsx
 *.png
 out/
+
+# Merchant memory contains reusable public outflow brands only. The builder
+# strips applicant-specific data, so the safe result is committed and deployed
+# from the same Git revision; confirmed agent-recognisable brands can be pruned.
+
+# Material received from Vikas, not ours to publish in a public repo.
+from vikas/
