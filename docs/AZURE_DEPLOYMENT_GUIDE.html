@@ -11,6 +11,11 @@
             box-sizing: border-box;
         }
 
+        html, body {
+            overflow-x: hidden;
+            max-width: 100%;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.6;
@@ -25,6 +30,7 @@
             background: white;
             padding: 40px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-x: hidden;
         }
 
         h1 {
@@ -128,6 +134,10 @@
             font-family: 'Courier New', Courier, monospace;
             font-size: 0.9em;
             color: #d73a49;
+            max-width: 100%;
+            overflow-x: auto;
+            word-break: break-word;
+            overflow-wrap: anywhere;
         }
 
         pre {
@@ -140,6 +150,8 @@
             font-size: 0.9em;
             line-height: 1.4;
             max-width: 100%;
+            word-break: break-word;
+            overflow-wrap: anywhere;
         }
 
         pre code {
@@ -147,16 +159,20 @@
             padding: 0;
             color: #f8f8f2;
             font-size: 1em;
+            max-width: 100%;
+            overflow-x: auto;
             word-break: break-word;
+            overflow-wrap: anywhere;
             white-space: pre-wrap;
         }
 
         table {
+            display: block;
             width: 100%;
+            max-width: 100%;
             border-collapse: collapse;
             margin-bottom: 1.5em;
             font-size: 0.95em;
-            display: block;
             overflow-x: auto;
         }
 
@@ -272,6 +288,8 @@
             background: #fafafa;
             border-radius: 8px;
             border: 1px solid #e1e4e8;
+            max-width: 100%;
+            overflow-x: hidden;
         }
 
         .architecture-diagram svg {
@@ -338,7 +356,10 @@
             }
 
             .container {
-                padding: 20px;
+                padding: 12px;
+                padding-left: 12px;
+                padding-right: 12px;
+                max-width: 100%;
             }
 
             h1 {
@@ -350,7 +371,16 @@
             }
 
             table {
-                font-size: 0.85em;
+                font-size: 12px;
+            }
+
+            pre {
+                font-size: 12px;
+                padding: 10px;
+            }
+
+            code {
+                font-size: 12px;
             }
 
             .step-number {
@@ -358,11 +388,6 @@
                 height: 30px;
                 line-height: 30px;
                 font-size: 0.9em;
-            }
-
-            pre {
-                font-size: 0.8em;
-                padding: 10px;
             }
 
             .architecture-diagram {
@@ -376,7 +401,10 @@
             }
 
             .container {
-                padding: 15px;
+                padding: 12px;
+                padding-left: 12px;
+                padding-right: 12px;
+                max-width: 100%;
             }
 
             h1 {
@@ -394,13 +422,18 @@
             }
 
             pre {
-                font-size: 0.75em;
+                font-size: 12px;
                 padding: 8px;
             }
 
             code {
+                font-size: 12px;
                 word-wrap: break-word;
                 overflow-wrap: break-word;
+            }
+
+            table {
+                font-size: 12px;
             }
 
             .toc {
