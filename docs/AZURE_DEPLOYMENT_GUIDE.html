@@ -440,8 +440,8 @@
                 <text x="500" y="253" text-anchor="middle" class="small-text">OpenAPI spec: openapi-servicing.json</text>
 
                 <!-- Function-key auth -->
-                <rect x="350" y="285" width="300" height="30" fill="#fff3cd" stroke="#ff9800" stroke-width="1" rx="3"/>
-                <text x="500" y="305" text-anchor="middle" class="small-text" fill="#856404">Function-key auth (x-functions-key header)</text>
+                <rect x="300" y="285" width="400" height="30" fill="#fff3cd" stroke="#ff9800" stroke-width="1" rx="3"/>
+                <text x="500" y="305" text-anchor="middle" class="small-text" fill="#856404">PROJECT CONNECTION auth (x-functions-key via connection)</text>
 
                 <!-- Azure Function App -->
                 <rect x="200" y="340" width="600" height="200" class="box-func" rx="5"/>
@@ -744,7 +744,7 @@ az cognitiveservices account keys list \
         <div class="step-header">
             <span class="step-number">6</span>
             <div>
-                <h3 style="margin: 0;">Configure 7 required environment variables</h3>
+                <h3 style="margin: 0;">Configure application settings for your Function App</h3>
             </div>
         </div>
 
@@ -752,6 +752,8 @@ az cognitiveservices account keys list \
             <strong>⚠️ CRITICAL: Never commit these values to git</strong>
             <p>All credentials must remain in Azure Portal configuration only.</p>
         </div>
+
+        <p>The live deployment uses the following settings. Separate operator-provided settings from platform-managed settings:</p>
 
         <pre><code>FUNC_APP_NAME="vikas-servicing-fn"
 RG_NAME="rg-kiwi-demo"
@@ -770,6 +772,11 @@ az functionapp config appsettings set \
     "BATCHES_CONTAINER=vikas-batches"</code></pre>
 
         <h3>Application Setting Reference</h3>
+        <p>Live observed settings include the following. <strong>Do not blindly overwrite platform-managed settings.</strong></p>
+
+        <h4>Operator-Provided Settings (Required)</h4>
+        <p>These settings must be configured by you during deployment:</p>
+
         <table>
             <thead>
                 <tr>
@@ -780,13 +787,8 @@ az functionapp config appsettings set \
             </thead>
             <tbody>
                 <tr>
-                    <td><code>AzureWebJobsStorage</code></td>
-                    <td>Function App internal storage connection string</td>
-                    <td><code>DefaultEndpointsProtocol=https;AccountName=...</code></td>
-                </tr>
-                <tr>
                     <td><code>STATEMENTS_STORAGE_CONNECTION_STRING</code></td>
-                    <td>Statement storage account connection string (typically same as above)</td>
+                    <td>Statement storage account connection string</td>
                     <td><code>DefaultEndpointsProtocol=https;AccountName=...</code></td>
                 </tr>
                 <tr>
@@ -800,31 +802,80 @@ az functionapp config appsettings set \
                     <td><code>&lt;32-character-hex-key&gt;</code></td>
                 </tr>
                 <tr>
-                    <td><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code></td>
-                    <td>Application Insights connection string for telemetry</td>
-                    <td><code>InstrumentationKey=...;IngestionEndpoint=...</code></td>
-                </tr>
-                <tr>
                     <td><code>EXTRACT_ALLOWED_BINDERS</code></td>
                     <td>Comma-separated list of allowed container names for statement input</td>
                     <td><code>vikas-samples</code> or <code>vikas-samples,prod-statements</code></td>
                 </tr>
+            </tbody>
+        </table>
+
+        <h4>Platform/Deployment-Managed Settings</h4>
+        <p>These settings are typically managed by Azure during Function App creation or deployment. Verify they exist but do not overwrite unless explicitly required:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Setting Name</th>
+                    <th>Description</th>
+                    <th>Managed By</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>AzureWebJobsStorage</code></td>
+                    <td>Function App internal storage connection string</td>
+                    <td>Azure (set during Function App creation)</td>
+                </tr>
+                <tr>
+                    <td><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code></td>
+                    <td>Application Insights connection string</td>
+                    <td>Azure (set when linking App Insights)</td>
+                </tr>
+                <tr>
+                    <td><code>DEPLOYMENT_STORAGE_CONNECTION_STRING</code></td>
+                    <td>Deployment storage connection string</td>
+                    <td>Azure deployment process</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>Optional Override Settings</h4>
+        <p>These settings have runtime defaults and only need to be set if you want to override the defaults:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Setting Name</th>
+                    <th>Description</th>
+                    <th>Default Value</th>
+                </tr>
+            </thead>
+            <tbody>
                 <tr>
                     <td><code>REPORTS_CONTAINER</code></td>
-                    <td>Container for published reports (optional, defaults to <code>vikas-reports</code>)</td>
+                    <td>Container for published reports</td>
                     <td><code>vikas-reports</code></td>
                 </tr>
                 <tr>
                     <td><code>BATCHES_CONTAINER</code></td>
-                    <td>Container for batch storage (optional, defaults to <code>vikas-batches</code>)</td>
+                    <td>Container for batch storage</td>
                     <td><code>vikas-batches</code></td>
+                </tr>
+                <tr>
+                    <td><code>EXTRACT_URL_ALLOWED_HOSTS</code></td>
+                    <td>Comma-separated allowed URL hosts for <code>file_urls</code> fallback</td>
+                    <td><code>*.blob.core.windows.net</code></td>
                 </tr>
             </tbody>
         </table>
 
         <div class="callout callout-info">
-            <strong>Optional settings:</strong>
-            <p><code>EXTRACT_URL_ALLOWED_HOSTS</code>: Comma-separated allowed URL hosts for <code>file_urls</code> fallback (defaults to <code>*.blob.core.windows.net</code>)</p>
+            <strong>Important:</strong>
+            <ul>
+                <li>Set the 4 operator-provided settings explicitly</li>
+                <li>Verify platform-managed settings exist (they should be auto-configured)</li>
+                <li>Only set optional overrides if you need different container names or allowed hosts</li>
+            </ul>
         </div>
 
         <h2 id="step7">7. Publish the Function App</h2>
@@ -931,7 +982,15 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
             </div>
         </div>
 
-        <h3>9.1 Create AI Foundry Project</h3>
+        <h3>9.1 Prerequisites for Foundry</h3>
+        <p>Ensure you have the following roles in your Azure AI Foundry project:</p>
+        <ul>
+            <li><strong>Foundry User</strong> role (to access the project and chat interface)</li>
+            <li><strong>Foundry Project Manager</strong> role (to create connections and manage project resources)</li>
+        </ul>
+        <p>These roles are required to create PROJECT CONNECTIONS for OpenAPI tool authentication.</p>
+
+        <h3>9.2 Create AI Foundry Project</h3>
         <ol>
             <li>Navigate to <strong>Azure AI Foundry</strong> at <a href="https://ai.azure.com">https://ai.azure.com</a></li>
             <li>Select your subscription and create a new <strong>AI Hub</strong> (if you don't have one)</li>
@@ -943,21 +1002,23 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
             </li>
         </ol>
 
-        <h3>9.2 Deploy Chat Model</h3>
+        <h3>9.3 Deploy Chat Model</h3>
         <ol>
             <li>In your AI Foundry project, go to <strong>Deployments</strong> → <strong>+ Create deployment</strong></li>
-            <li>Select your preferred model (e.g., <code>gpt-4o</code>, <code>gpt-4-turbo</code>, or <code>gpt-3.5-turbo</code>)</li>
+            <li><strong>Choose a model and region that supports OpenAPI tools</strong> (e.g., <code>gpt-4o</code>, <code>gpt-4-turbo</code>, or newer models in supported regions)</li>
             <li>Configure:
                 <ul>
-                    <li><strong>Deployment name:</strong> <code>gpt-5</code> or your chosen name</li>
+                    <li><strong>Deployment name:</strong> Use a name consistent with the model you selected (e.g., <code>gpt-4o-deployment</code> for <code>gpt-4o</code>)</li>
+                    <li><strong>Do NOT</strong> name a non-gpt-5 deployment <code>gpt-5</code> - keep the deployment name aligned with the actual model</li>
                     <li><strong>Model version:</strong> Latest available</li>
                     <li><strong>Tokens per minute rate limit:</strong> Set according to your needs</li>
                 </ul>
             </li>
             <li><strong>Deploy</strong> and wait for the deployment to complete</li>
+            <li>Verify the deployment shows OpenAPI/function-calling support in the model capabilities</li>
         </ol>
 
-        <h3>9.3 Create the Agent</h3>
+        <h3>9.4 Create the Agent</h3>
         <ol>
             <li>In your AI Foundry project, go to <strong>Agents</strong> → <strong>+ Create agent</strong></li>
             <li>Configure:
@@ -969,7 +1030,7 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
             </li>
         </ol>
 
-        <h3>9.4 Paste Agent Instructions</h3>
+        <h3>9.5 Paste Agent Instructions</h3>
         <div class="callout callout-important">
             <strong>⚠️ CRITICAL STEP</strong>
             <p>The agent instructions define how the model classifies transactions and calls the functions. This file is the exact prompt the agent must follow.</p>
@@ -1039,7 +1100,9 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
             </li>
         </ol>
 
-        <h3>10.3 Configure Authentication</h3>
+        <h3>10.3 Configure Authentication with PROJECT CONNECTION</h3>
+        <p>Microsoft Foundry requires a <strong>PROJECT CONNECTION</strong> to authenticate OpenAPI tools. You cannot paste the Function key directly into the tool configuration.</p>
+        
         <p>The OpenAPI spec defines a security scheme <code>functionsKey</code>:</p>
 <pre><code>"securitySchemes": {
   "functionsKey": {
@@ -1049,16 +1112,48 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
   }
 }</code></pre>
 
-        <p>In Foundry:</p>
+        <div class="callout callout-important">
+            <strong>Steps to create and use a PROJECT CONNECTION:</strong>
+        </div>
+
         <ol>
-            <li>Set <strong>Authentication type</strong> to <strong>API Key</strong></li>
-            <li>Configure:
+            <li>In your AI Foundry project, go to <strong>Settings</strong> → <strong>Connections</strong> (or <strong>Connected resources</strong>)</li>
+            <li>Click <strong>+ New connection</strong> or <strong>+ Add connection</strong></li>
+            <li>Select <strong>Custom API</strong> or <strong>API key connection</strong></li>
+            <li>Configure the connection:
                 <ul>
-                    <li><strong>Header name:</strong> <code>x-functions-key</code></li>
-                    <li><strong>API key value:</strong> Paste your Function App default function key from Step 7.2</li>
+                    <li><strong>Connection name:</strong> <code>vikas-servicing-key</code> (or your preferred name)</li>
+                    <li><strong>Key name:</strong> <code>x-functions-key</code> (must match the OpenAPI security scheme exactly)</li>
+                    <li><strong>Key value:</strong> Paste your Function App default function key from Step 7.2</li>
                 </ul>
             </li>
+            <li><strong>Save</strong> the connection</li>
         </ol>
+
+        <div class="callout callout-info">
+            <strong>Attach the connection to your OpenAPI tool:</strong>
+        </div>
+
+        <ol>
+            <li>Return to your agent's <strong>Tools</strong> or <strong>Actions</strong> configuration</li>
+            <li>Find the <code>vikas_servicing</code> OpenAPI tool you created</li>
+            <li>In the <strong>Authentication</strong> section:
+                <ul>
+                    <li><strong>Authentication type:</strong> Select <strong>Connection</strong> or <strong>Use connection</strong></li>
+                    <li><strong>Select connection:</strong> Choose <code>vikas-servicing-key</code> (the connection you created above)</li>
+                </ul>
+            </li>
+            <li><strong>Save</strong> the tool configuration</li>
+        </ol>
+
+        <div class="callout callout-warning">
+            <strong>Important:</strong>
+            <ul>
+                <li>The custom key name in the connection (<code>x-functions-key</code>) must match the <code>name</code> field in the OpenAPI <code>securitySchemes</code></li>
+                <li><strong>Do NOT</strong> paste the Function key directly into the tool configuration - always use a PROJECT CONNECTION</li>
+                <li>Verify your model and region support OpenAPI tools - older models or certain regions may not support function calling</li>
+            </ul>
+        </div>
 
         <div class="callout callout-info">
             <strong>Alternative for production:</strong>
@@ -1098,9 +1193,13 @@ az storage blob upload \
   --name statement.pdf \
   --connection-string "$STORAGE_CONN"</code></pre>
 
-        <div class="callout callout-warning">
-            <strong>Note:</strong>
-            <p>Use synthetic/test statements only. <strong>Never upload files containing real customer names or personal information.</strong></p>
+        <div class="callout callout-important">
+            <strong>Important - PII and Data Handling:</strong>
+            <ul>
+                <li><strong>For smoke testing and Git/public repo use:</strong> Use synthetic/test statements only. Never upload files containing real customer names or personal information to Git or public repositories.</li>
+                <li><strong>For production use:</strong> Real customer PII and production bank statements must only be stored in controlled private Azure storage under your organization's data governance policies. The service is designed to process real customer data in production environments with appropriate security controls.</li>
+                <li><strong>This guide covers:</strong> Deployment and smoke testing with synthetic data. Production data handling should follow your organization's compliance requirements.</li>
+            </ul>
         </div>
 
         <h3>11.2 Test Chat - Excel Output</h3>
@@ -1230,7 +1329,7 @@ az monitor app-insights query \
 
         <ol>
             <li>Find the previous deployment ID:
-<pre><code>az webapp deployment list \
+<pre><code>az webapp log deployment list \
   --name vikas-servicing-fn \
   --resource-group rg-kiwi-demo \
   --query "[].{id:id, status:status, active:active, receivedTime:receivedTime}" \
@@ -1247,19 +1346,20 @@ func azure functionapp publish vikas-servicing-fn</code></pre>
         <h2 id="privacy">Privacy and Security Rules</h2>
 
         <h3>⚠️ Never Commit Secrets</h3>
-        <p>The following must <strong>NEVER</strong> be committed to git:</p>
+        <p>The following must <strong>NEVER</strong> be committed to git or public repositories:</p>
         <ul>
             <li>Connection strings (storage, Application Insights)</li>
             <li>API keys (Document Intelligence, Function keys)</li>
             <li>SAS tokens</li>
-            <li>Real applicant names or PII</li>
-            <li>Real bank statement files</li>
+            <li>Real customer PII, names, or personal information</li>
+            <li>Real bank statement files containing customer data</li>
         </ul>
 
-        <h3>Local-Only Content</h3>
+        <h3>Local-Only Content and Data Governance</h3>
         <ul>
             <li>Folder <code>from vikas/</code> (if present on your local machine) is <strong>local-only</strong>. Never commit, push, or upload.</li>
-            <li>Do not upload files containing real human names, applicant PII, or statement-derived personal data.</li>
+            <li><strong>For Git/public repos:</strong> Do not commit files containing real human names, customer PII, or statement-derived personal data.</li>
+            <li><strong>For production deployments:</strong> Real customer data belongs only in controlled private Azure storage under your organization's data governance and compliance policies (not in Git).</li>
             <li><code>VIKAS-ATTACHMENTS-ANALYSIS.md</code> is host-private analysis and was removed in PR #6 - do not re-add.</li>
         </ul>
 
@@ -1276,7 +1376,7 @@ func azure functionapp publish vikas-servicing-fn</code></pre>
                 <li>Storage account created with three containers (<code>samples</code>, <code>batches</code>, <code>reports</code>)</li>
                 <li>Document Intelligence resource created and credentials obtained</li>
                 <li>Function App created with App Service Plan and Application Insights</li>
-                <li>All 7 application settings configured</li>
+                <li>Required operator-provided application settings configured (STATEMENTS_STORAGE_CONNECTION_STRING, DOCUMENTINTELLIGENCE_ENDPOINT, DOCUMENTINTELLIGENCE_KEY, EXTRACT_ALLOWED_BINDERS)</li>
                 <li>Functions published successfully (<code>func azure functionapp publish</code>)</li>
                 <li>Smoke tests pass (HTTP 400 on empty body, not 404/500)</li>
                 <li>AI Foundry project created with model deployed</li>

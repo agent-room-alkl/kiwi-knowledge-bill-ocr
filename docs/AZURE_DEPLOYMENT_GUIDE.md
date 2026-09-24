@@ -201,7 +201,9 @@ az functionapp create \
 
 ## Step 6: Configure Function App Settings
 
-Configure these **7 required application settings**. Never commit these values to git.
+Configure application settings for your Function App. Never commit these values to git.
+
+The live deployment uses the following settings (separate operator-provided from platform-managed):
 
 ```bash
 FUNC_APP_NAME="vikas-servicing-fn"
@@ -223,19 +225,43 @@ az functionapp config appsettings set \
 
 ### Application Setting Reference
 
+Live observed settings include the following. **Do not blindly overwrite platform-managed settings.**
+
+#### Operator-Provided Settings (Required)
+
+These settings must be configured by you during deployment:
+
 | Setting Name | Description | Example Value |
 |---|---|---|
-| `AzureWebJobsStorage` | Function App internal storage connection string | `DefaultEndpointsProtocol=https;AccountName=...` |
-| `STATEMENTS_STORAGE_CONNECTION_STRING` | Statement storage account connection string (same as above) | `DefaultEndpointsProtocol=https;AccountName=...` |
+| `STATEMENTS_STORAGE_CONNECTION_STRING` | Statement storage account connection string | `DefaultEndpointsProtocol=https;AccountName=...` |
 | `DOCUMENTINTELLIGENCE_ENDPOINT` | Document Intelligence resource endpoint | `https://kiwi-docs.cognitiveservices.azure.com/` |
 | `DOCUMENTINTELLIGENCE_KEY` | Document Intelligence API key | `<32-character-hex-key>` |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | `InstrumentationKey=...` |
 | `EXTRACT_ALLOWED_BINDERS` | Comma-separated list of allowed container names | `vikas-samples` or `vikas-samples,prod-statements` |
-| `REPORTS_CONTAINER` | Container for published reports (optional, defaults to `vikas-reports`) | `vikas-reports` |
-| `BATCHES_CONTAINER` | Container for batch storage (optional, defaults to `vikas-batches`) | `vikas-batches` |
 
-**Optional settings:**
-- `EXTRACT_URL_ALLOWED_HOSTS`: Comma-separated allowed URL hosts for `file_urls` fallback (defaults to `*.blob.core.windows.net`)
+#### Platform/Deployment-Managed Settings
+
+These settings are typically managed by Azure during Function App creation or deployment. Verify they exist but do not overwrite unless explicitly required:
+
+| Setting Name | Description | Managed By |
+|---|---|---|
+| `AzureWebJobsStorage` | Function App internal storage connection string | Azure (set during Function App creation) |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | Azure (set when linking App Insights) |
+| `DEPLOYMENT_STORAGE_CONNECTION_STRING` | Deployment storage connection string | Azure deployment process |
+
+#### Optional Override Settings
+
+These settings have runtime defaults and only need to be set if you want to override the defaults:
+
+| Setting Name | Description | Default Value |
+|---|---|---|
+| `REPORTS_CONTAINER` | Container for published reports | `vikas-reports` |
+| `BATCHES_CONTAINER` | Container for batch storage | `vikas-batches` |
+| `EXTRACT_URL_ALLOWED_HOSTS` | Comma-separated allowed URL hosts for `file_urls` fallback | `*.blob.core.windows.net` |
+
+**Important:**
+- Set the 4 operator-provided settings explicitly
+- Verify platform-managed settings exist (they should be auto-configured)
+- Only set optional overrides if you need different container names or allowed hosts
 
 ⚠️ **Security:** NEVER commit connection strings, keys, or SAS tokens to the repository.
 
@@ -328,7 +354,15 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
 
 ## Step 9: Azure AI Foundry Setup
 
-### 9.1 Create AI Foundry Project
+### 9.1 Prerequisites for Foundry
+
+Ensure you have the following roles in your Azure AI Foundry project:
+- **Foundry User** role (to access the project and chat interface)
+- **Foundry Project Manager** role (to create connections and manage project resources)
+
+These roles are required to create PROJECT CONNECTIONS for OpenAPI tool authentication.
+
+### 9.2 Create AI Foundry Project
 
 1. Navigate to **Azure AI Foundry** at https://ai.azure.com
 2. Select your subscription and create a new **AI Hub** (if you don't have one)
@@ -336,17 +370,19 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
    - Name: `kiwi-knowage-proj` (or your preferred name)
    - Region: Same as your Function App (e.g., `australiaeast`)
 
-### 9.2 Deploy Chat Model
+### 9.3 Deploy Chat Model
 
 1. In your AI Foundry project, go to **Deployments** → **+ Create deployment**
-2. Select your preferred model (e.g., `gpt-4o`, `gpt-4-turbo`, or `gpt-3.5-turbo`)
+2. **Choose a model and region that supports OpenAPI tools** (e.g., `gpt-4o`, `gpt-4-turbo`, or newer models in supported regions)
 3. Configure:
-   - Deployment name: `gpt-5` or your chosen name
+   - Deployment name: Use a name consistent with the model you selected (e.g., `gpt-4o-deployment` for `gpt-4o`)
+   - **Do NOT** name a non-gpt-5 deployment `gpt-5` - keep the deployment name aligned with the actual model
    - Model version: Latest available
    - Tokens per minute rate limit: Set according to your needs
 4. **Deploy** and wait for the deployment to complete
+5. Verify the deployment shows OpenAPI/function-calling support in the model capabilities
 
-### 9.3 Create the Agent
+### 9.4 Create the Agent
 
 1. In your AI Foundry project, go to **Agents** → **+ Create agent**
 2. Configure:
@@ -354,7 +390,7 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
    - Model deployment: Select the deployment you created above
    - Description: "NZ bank statement servicing assessment agent"
 
-### 9.4 Paste Agent Instructions
+### 9.5 Paste Agent Instructions
 
 **⚠️ CRITICAL STEP:** The agent instructions define how the model classifies transactions and calls the functions.
 
@@ -411,7 +447,9 @@ This step connects your Foundry agent to the three Azure Functions you deployed.
    - **Description:** `Extract NZ bank statements, compute servicing totals in code, render Excel and HTML reports. The model classifies only; never invents Part 1 numbers.`
    - **OpenAPI Specification:** Copy the **entire contents** of your updated `foundry/openapi-servicing.json` and paste it
 
-### 10.3 Configure Authentication
+### 10.3 Configure Authentication with PROJECT CONNECTION
+
+Microsoft Foundry requires a **PROJECT CONNECTION** to authenticate OpenAPI tools. You cannot paste the Function key directly into the tool configuration.
 
 The OpenAPI spec defines a security scheme `functionsKey`:
 
@@ -425,11 +463,30 @@ The OpenAPI spec defines a security scheme `functionsKey`:
 }
 ```
 
-In Foundry:
-1. Set **Authentication type** to **API Key**
-2. Configure:
-   - **Header name:** `x-functions-key`
-   - **API key value:** Paste your Function App default function key from Step 7.2
+**Steps to create and use a PROJECT CONNECTION:**
+
+1. In your AI Foundry project, go to **Settings** → **Connections** (or **Connected resources**)
+2. Click **+ New connection** or **+ Add connection**
+3. Select **Custom API** or **API key connection**
+4. Configure the connection:
+   - **Connection name:** `vikas-servicing-key` (or your preferred name)
+   - **Key name:** `x-functions-key` (must match the OpenAPI security scheme exactly)
+   - **Key value:** Paste your Function App default function key from Step 7.2
+5. **Save** the connection
+
+**Attach the connection to your OpenAPI tool:**
+
+1. Return to your agent's **Tools** or **Actions** configuration
+2. Find the `vikas_servicing` OpenAPI tool you created
+3. In the **Authentication** section:
+   - **Authentication type:** Select **Connection** or **Use connection**
+   - **Select connection:** Choose `vikas-servicing-key` (the connection you created above)
+4. **Save** the tool configuration
+
+**Important:**
+- The custom key name in the connection (`x-functions-key`) must match the `name` field in the OpenAPI `securitySchemes`
+- **Do NOT** paste the Function key directly into the tool configuration - always use a PROJECT CONNECTION
+- Verify your model and region support OpenAPI tools - older models or certain regions may not support function calling
 
 **Alternative for production:** Use Managed Identity authentication if your Foundry project and Function App support it.
 
@@ -461,7 +518,10 @@ az storage blob upload \
   --connection-string "$STORAGE_CONN"
 ```
 
-**Note:** Use synthetic/test statements only. Never upload files containing real customer names or personal information.
+**Important - PII and Data Handling:**
+- **For smoke testing and Git/public repo use:** Use synthetic/test statements only. Never upload files containing real customer names or personal information to Git or public repositories.
+- **For production use:** Real customer PII and production bank statements must only be stored in controlled private Azure storage under your organization's data governance policies. The service is designed to process real customer data in production environments with appropriate security controls.
+- **This guide covers:** Deployment and smoke testing with synthetic data. Production data handling should follow your organization's compliance requirements.
 
 ### 11.2 Test Chat - Excel Output
 
@@ -567,7 +627,7 @@ If a deployment fails:
 
 1. Find the previous deployment ID:
 ```bash
-az webapp deployment list \
+az webapp log deployment list \
   --name vikas-servicing-fn \
   --resource-group rg-kiwi-demo \
   --query "[].{id:id, status:status, active:active, receivedTime:receivedTime}" \
@@ -589,17 +649,18 @@ func azure functionapp publish vikas-servicing-fn
 
 ### ⚠️ Never Commit Secrets
 
-The following must **NEVER** be committed to git:
+The following must **NEVER** be committed to git or public repositories:
 - Connection strings (storage, Application Insights)
 - API keys (Document Intelligence, Function keys)
 - SAS tokens
-- Real applicant names or PII
-- Real bank statement files
+- Real customer PII, names, or personal information
+- Real bank statement files containing customer data
 
-### Local-Only Content
+### Local-Only Content and Data Governance
 
 - Folder `from vikas/` (if present on your local machine) is **local-only**. Never commit, push, or upload.
-- Do not upload files containing real human names, applicant PII, or statement-derived personal data.
+- **For Git/public repos:** Do not commit files containing real human names, customer PII, or statement-derived personal data.
+- **For production deployments:** Real customer data belongs only in controlled private Azure storage under your organization's data governance and compliance policies (not in Git).
 - `VIKAS-ATTACHMENTS-ANALYSIS.md` is host-private analysis and was removed in PR #6 - do not re-add.
 
 ### Rebuilding Merchant Memory
