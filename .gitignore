@@ -27,3 +27,6 @@ out/
 
 # Material received from Vikas, not ours to publish in a public repo.
 from vikas/
+
+# Personal notes and analysis files with real human names / applicant PII must not be committed.
+VIKAS-ATTACHMENTS-ANALYSIS.md

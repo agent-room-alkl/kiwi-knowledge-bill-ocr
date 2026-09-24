@@ -1,6 +1,6 @@
 # 报告模板需求与实施方案（给 Robin 的一份）
 
-合并来源：`specs/vikas-skill-vs-ours-analysis.md`（Claude / T-02）+ `VIKAS-ATTACHMENTS-ANALYSIS.md`（Codex / T-01）。
+合并来源：`specs/vikas-skill-vs-ours-analysis.md`（Claude / T-02）+ internal Codex analysis（T-01）。
 两份冲突处见第 6 节，每处写了采纳谁、为什么。本文件只谈需求和怎么做，**不改代码**。
 
 ---
