@@ -36,6 +36,8 @@ Note: The Function App also uses `vikas-reports` and `vikas-batches` containers 
 
 4. **PowerShell** (for Windows deployment script) or Bash
 
+**Note:** The azurerm provider 4.x requires `subscription_id` to be explicitly set. The `deploy.ps1` script automatically exports `ARM_SUBSCRIPTION_ID` from `az account show` for you. If running Terraform commands manually, ensure `ARM_SUBSCRIPTION_ID` environment variable is set.
+
 ## Quick Start
 
 ### 1. Configure Variables

@@ -8,6 +8,7 @@
 # Project Configuration
 # ===========================
 
+# subscription_id = ""  # Optional: Azure subscription ID (deploy.ps1 auto-exports ARM_SUBSCRIPTION_ID)
 project_name   = "kiwi-ocr"
 unique_suffix  = ""  # Leave empty to generate random suffix, or provide 4-8 char string
 environment    = "dev"

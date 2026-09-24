@@ -35,11 +35,11 @@ provider "azurerm" {
       purge_soft_delete_on_destroy = false
     }
   }
-  # subscription_id, tenant_id, client_id, client_secret via environment or az cli auth
+  subscription_id = var.subscription_id != "" ? var.subscription_id : null
 }
 
 provider "azapi" {
-  # inherits azurerm auth
+  subscription_id = var.subscription_id != "" ? var.subscription_id : null
 }
 
 provider "random" {}

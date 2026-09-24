@@ -110,6 +110,12 @@ function Test-Prerequisites {
     try {
         $account = az account show --output json | ConvertFrom-Json
         Write-Success "Authenticated to Azure subscription: $($account.name)"
+        
+        # Export ARM_SUBSCRIPTION_ID for azurerm provider 4.x
+        $env:ARM_SUBSCRIPTION_ID = $account.id
+        $env:ARM_TENANT_ID = $account.tenantId
+        Write-Info "Exported ARM_SUBSCRIPTION_ID=$($account.id)"
+        Write-Info "Exported ARM_TENANT_ID=$($account.tenantId)"
     }
     catch {
         Write-Error-Custom "Not authenticated to Azure. Run: az login"
