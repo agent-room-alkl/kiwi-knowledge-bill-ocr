@@ -201,6 +201,7 @@ resource "azurerm_linux_function_app" "main" {
     # Platform/Deployment-Managed (auto-wired from Terraform)
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.main.connection_string
     "AzureWebJobsStorage"                   = azurerm_storage_account.main.primary_connection_string
+    "AzureWebJobsFeatureFlags"              = "EnableWorkerIndexing"
     "FUNCTIONS_WORKER_RUNTIME"              = "python"
     "WEBSITE_RUN_FROM_PACKAGE"              = "1"
 
