@@ -83,6 +83,12 @@ with no model reason, and `audit.join_miss_rows` counts them. Prefer
 `unclear` plus a reason over dropping an entry. **C9** reads that count, not
 the length of your classifications array.
 
+**On each C9 repair pass, every remaining join-miss merchant must receive
+a classification entry.** Even if confidence is low, provide `unclear` with
+a reason rather than omitting the entry. An omitted merchant stays
+unclassified forever; `unclear` is a valid classification that documents
+what information is missing.
+
 **Classify inflows too.** Salary / employer payroll → `salary_wages`;
 WINZ/WFF → `benefit`; rent received → `rental_income`. Own-account moves →
 `internal_transfer`; card refunds → `reimbursement`.
@@ -106,6 +112,10 @@ put it in recommended living.
 
 Person-name **outflows** in that food-trade pattern are business
 COGS/payouts: `is_business` yes, include false, not household grocery.
+When the binder shows person-name inflows as `business_receipts`, any
+matching person-name outflows (PAY / BILL PAYMENT / DIRECT CREDIT to those
+same names) MUST be classified `is_business` yes, `include_in_living_expenses`
+false, reason `side-business payout/COGS`. Never classify them as `unclear`.
 
 Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering
 channel) → `is_business` yes, include false, `wholesale stock / COGS`.
@@ -279,8 +289,8 @@ Mapping (generic):
   `recreation_entertainment` (not transport, not grocery)
 - supermarket / grocery / butcher / essential clothing →
   `food_grocery_clothing_personal_care`
-- Netflix / Spotify / gym / iCloud / set-and-forget apps →
-  `monthly_subscriptions`
+- Netflix / Spotify / gym / iCloud / Amazon Prime / Amazon Prime Video /
+  set-and-forget apps → `monthly_subscriptions`
 - power / water / gas / broadband / mobile → `utilities` + `utility_type`
 - insurance premium → `insurance` + `insurance_type`
 - KiwiSaver / savings / Sharesies → `kiwisaver_savings_investments`,
