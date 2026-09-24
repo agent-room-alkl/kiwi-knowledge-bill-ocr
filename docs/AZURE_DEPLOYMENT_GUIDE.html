@@ -139,6 +139,7 @@
             margin-bottom: 1.5em;
             font-size: 0.9em;
             line-height: 1.4;
+            max-width: 100%;
         }
 
         pre code {
@@ -146,6 +147,8 @@
             padding: 0;
             color: #f8f8f2;
             font-size: 1em;
+            word-break: break-word;
+            white-space: pre-wrap;
         }
 
         table {
@@ -153,6 +156,8 @@
             border-collapse: collapse;
             margin-bottom: 1.5em;
             font-size: 0.95em;
+            display: block;
+            overflow-x: auto;
         }
 
         th, td {
@@ -269,6 +274,11 @@
             border: 1px solid #e1e4e8;
         }
 
+        .architecture-diagram svg {
+            max-width: 100%;
+            height: auto;
+        }
+
         .step-number {
             display: inline-block;
             background: #0078d4;
@@ -348,6 +358,57 @@
                 height: 30px;
                 line-height: 30px;
                 font-size: 0.9em;
+            }
+
+            pre {
+                font-size: 0.8em;
+                padding: 10px;
+            }
+
+            .architecture-diagram {
+                padding: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+                word-wrap: break-word;
+            }
+
+            h2 {
+                font-size: 1.2em;
+                word-wrap: break-word;
+            }
+
+            h3 {
+                font-size: 1.1em;
+            }
+
+            pre {
+                font-size: 0.75em;
+                padding: 8px;
+            }
+
+            code {
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+
+            .toc {
+                padding: 15px;
+            }
+
+            .architecture-diagram {
+                padding: 5px;
             }
         }
     </style>
