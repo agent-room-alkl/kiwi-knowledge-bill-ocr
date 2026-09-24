@@ -27,12 +27,11 @@ use_existing_resource_group = false
 
 storage_account_tier     = "Standard"  # Standard or Premium
 storage_replication_type = "LRS"       # LRS, GRS, RAGRS, ZRS, GZRS, RAGZRS
-storage_containers       = ["samples", "batches", "reports"]
+storage_containers       = ["vikas-samples"]  # Input container(s) for EXTRACT_ALLOWED_BINDERS
 
-# Optional: Override container names used by Function App
-# samples_container_override = "custom-samples"
-# batches_container_override = "custom-batches"
-# reports_container_override = "custom-reports"
+# Optional: Override default container names used by Function App
+# batches_container_override = "custom-batches"  # Default: vikas-batches
+# reports_container_override = "custom-reports"  # Default: vikas-reports
 
 # ===========================
 # Document Intelligence
@@ -48,9 +47,6 @@ app_service_plan_sku = "B1"  # B1, B2, B3, S1-S3, P1v2-P3v3 (Linux plans)
 
 # Use managed identity for Document Intelligence access (recommended for production)
 use_managed_identity = false  # Set to true to use managed identity instead of API keys
-
-# Enable binder lookup feature
-binder_lookup_enabled = true
 
 # ===========================
 # Azure AI Foundry (Preview)

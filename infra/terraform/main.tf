@@ -201,22 +201,18 @@ resource "azurerm_linux_function_app" "main" {
     # Platform/Deployment-Managed (auto-wired from Terraform)
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.main.connection_string
     "AzureWebJobsStorage"                   = azurerm_storage_account.main.primary_connection_string
-    "DEPLOYMENT_STORAGE_CONNECTION_STRING"  = azurerm_storage_account.main.primary_connection_string
+    "FUNCTIONS_WORKER_RUNTIME"              = "python"
+    "WEBSITE_RUN_FROM_PACKAGE"              = "1"
 
     # Operator-Provided (set via terraform.tfvars)
-    "DOCUMENT_INTELLIGENCE_ENDPOINT" = azurerm_cognitive_account.doc_intelligence.endpoint
-    "DOCUMENT_INTELLIGENCE_KEY"      = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence.primary_access_key
-    "ALLOWED_CONTAINERS"             = join(",", local.containers)
-    "BINDER_LOOKUP_ENABLED"          = tostring(var.binder_lookup_enabled)
+    "DOCUMENTINTELLIGENCE_ENDPOINT"       = azurerm_cognitive_account.doc_intelligence.endpoint
+    "DOCUMENTINTELLIGENCE_KEY"            = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence.primary_access_key
+    "STATEMENTS_STORAGE_CONNECTION_STRING" = azurerm_storage_account.main.primary_connection_string
+    "EXTRACT_ALLOWED_BINDERS"             = join(",", local.containers)
 
     # Optional Container Overrides (operator can customize)
-    "SAMPLES_CONTAINER" = var.samples_container_override != "" ? var.samples_container_override : local.containers[0]
-    "BATCHES_CONTAINER" = var.batches_container_override != "" ? var.batches_container_override : local.containers[1]
-    "REPORTS_CONTAINER" = var.reports_container_override != "" ? var.reports_container_override : local.containers[2]
-
-    # Python runtime
-    "FUNCTIONS_WORKER_RUNTIME" = "python"
-    "WEBSITE_RUN_FROM_PACKAGE" = "1"
+    "REPORTS_CONTAINER" = var.reports_container_override != "" ? var.reports_container_override : "vikas-reports"
+    "BATCHES_CONTAINER" = var.batches_container_override != "" ? var.batches_container_override : "vikas-batches"
   }
 
   identity {

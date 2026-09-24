@@ -80,30 +80,24 @@ variable "storage_replication_type" {
 }
 
 variable "storage_containers" {
-  description = "Storage container names for samples, batches, and reports"
+  description = "Storage container names for input statements (e.g. vikas-samples). Code also uses vikas-reports and vikas-batches by default."
   type        = list(string)
-  default     = ["samples", "batches", "reports"]
+  default     = ["vikas-samples"]
 
   validation {
-    condition     = length(var.storage_containers) >= 3
-    error_message = "At least 3 containers required (samples, batches, reports)"
+    condition     = length(var.storage_containers) >= 1
+    error_message = "At least 1 container required for input statements"
   }
 }
 
-variable "samples_container_override" {
-  description = "Override the samples container name (optional, defaults to first container)"
+variable "reports_container_override" {
+  description = "Override the reports container name (optional, defaults to vikas-reports)"
   type        = string
   default     = ""
 }
 
 variable "batches_container_override" {
-  description = "Override the batches container name (optional, defaults to second container)"
-  type        = string
-  default     = ""
-}
-
-variable "reports_container_override" {
-  description = "Override the reports container name (optional, defaults to third container)"
+  description = "Override the batches container name (optional, defaults to vikas-batches)"
   type        = string
   default     = ""
 }
@@ -146,12 +140,6 @@ variable "use_managed_identity" {
   description = "Use managed identity for Document Intelligence access instead of API key"
   type        = bool
   default     = false
-}
-
-variable "binder_lookup_enabled" {
-  description = "Enable binder lookup feature in Function App"
-  type        = bool
-  default     = true
 }
 
 # ===========================

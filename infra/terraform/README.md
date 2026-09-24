@@ -5,13 +5,15 @@ One-click Azure infrastructure deployment for the kiwi-knowledge-bill-ocr servic
 ## What This Creates
 
 - **Resource Group** (or attaches to existing)
-- **Storage Account** with containers: `samples`, `batches`, `reports`
+- **Storage Account** with configurable input containers (e.g., `vikas-samples`)
 - **Document Intelligence** (FormRecognizer) for OCR
 - **Application Insights** for monitoring
 - **Linux App Service Plan** (Python 3.11 compatible)
 - **Function App** (Python 3.11) with auto-wired settings
 - **AI Foundry Hub/Project** (optional, preview feature)
 - **Model Deployment** (optional, if Foundry resources created)
+
+Note: The Function App also uses `vikas-reports` and `vikas-batches` containers by default (configurable).
 
 ## Prerequisites
 
@@ -139,28 +141,32 @@ See [deploy.ps1](./deploy.ps1) for details.
 
 ## Function App Settings
 
-### Platform/Deployment-Managed (Auto-Wired)
-
-These are automatically set by Terraform from resource outputs:
+### Platform/Deployment-Managed (4 settings, auto-wired by Terraform)
 
 1. `APPLICATIONINSIGHTS_CONNECTION_STRING` - Application Insights telemetry
 2. `AzureWebJobsStorage` - Functions runtime storage
-3. `DEPLOYMENT_STORAGE_CONNECTION_STRING` - Batch/report storage
+3. `FUNCTIONS_WORKER_RUNTIME` - Python runtime
+4. `WEBSITE_RUN_FROM_PACKAGE` - Code deployment mode
 
-### Operator-Provided (via terraform.tfvars)
+### Operator-Provided (4 settings, wire from Azure resources)
 
-These require configuration or are set from variables:
+These are set by Terraform based on the resources it creates:
 
-4. `DOCUMENT_INTELLIGENCE_ENDPOINT` - Document Intelligence endpoint URL
-5. `DOCUMENT_INTELLIGENCE_KEY` - API key (or empty if using managed identity)
-6. `ALLOWED_CONTAINERS` - Comma-separated container list
-7. `BINDER_LOOKUP_ENABLED` - Feature flag for binder lookup
+5. `DOCUMENTINTELLIGENCE_ENDPOINT` - Document Intelligence service endpoint (NO underscore in name)
+6. `DOCUMENTINTELLIGENCE_KEY` - API key (or empty string if using managed identity)
+7. `STATEMENTS_STORAGE_CONNECTION_STRING` - Storage account connection for statements/batches/reports
+8. `EXTRACT_ALLOWED_BINDERS` - Comma-separated container names for input (e.g., "vikas-samples")
 
-### Optional Overrides
+### Optional Overrides (2 settings, with defaults)
 
-8. `SAMPLES_CONTAINER` - Override samples container name
-9. `BATCHES_CONTAINER` - Override batches container name
-10. `REPORTS_CONTAINER` - Override reports container name
+9. `REPORTS_CONTAINER` - Output reports container (default: `vikas-reports`)
+10. `BATCHES_CONTAINER` - Canonical batch storage container (default: `vikas-batches`)
+
+### Optional URL Allowlist (1 setting)
+
+11. `EXTRACT_URL_ALLOWED_HOSTS` - SSRF protection (default: `.blob.core.windows.net`)
+
+**Note:** The code reads these exact names from `function_app/extract_normalize.py`. Do not rename them without updating the Python code.
 
 ## Managed Identity (Recommended for Production)
 
