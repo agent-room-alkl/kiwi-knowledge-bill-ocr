@@ -286,6 +286,7 @@ _LEADING_PUNCT_RE = re.compile(r"^[\s\-_:./]+")
 _MERCHANT_ALIASES = (
     (re.compile(r"ANTHROPIC|CLAUDE\.?AI|CLAUDE SUB"), "ANTHROPIC / CLAUDE"),
     (re.compile(r"AGENT-?ROOM"), "AGENT-ROOM.COM"),
+    (re.compile(r"AMAZON PRIME"), "AMAZON PRIME VIDEO"),
     (re.compile(r"GILMOURS"), "GILMOURS"),
     (re.compile(r"\bDIDI"), "DIDI_NZ"),
     (re.compile(r"WOOLWORTHS|COUNTDOWN"), "WOOLWORTHS"),
