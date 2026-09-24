@@ -573,11 +573,9 @@ check("transaction_ids are unique", len(ids), total)
 
 print("\n" + "=" * 62)
 if FAILURES:
-    print(f"FAILED ({len(FAILURES)}):")
-    for f in FAILURES:
-        print("  -", f)
-    sys.exit(1)
-print(f"All checks passed. {total} transactions across {len(all_batches)} synthetic layouts.")
+    print(f"{len(FAILURES)} check(s) failed so far; continuing with regression checks.")
+else:
+    print(f"Core checks passed. {total} transactions across {len(all_batches)} synthetic layouts.")
 
 
 print("== the applicant name field must not be filled from an address ==")
@@ -593,7 +591,7 @@ _addr_header = [
 _got = _applicant_evidence(_addr_header)["Full Name(s)"]
 check_true("a street name is not offered as the account holder", "LAURINA" not in _got.upper(), _got)
 check_true("a postal address is not offered either", "PRIVATE BAG" not in _got.upper(), _got)
-check("an unreadable name says so rather than guessing", _got, "Not provided in binder")
+check("a titled initial and surname is kept as the printed holder name", _got, "MR A TAYLOR")
 
 for _bad in ["Laurina Road", "Private Bag", "Po Box", "Barfoot Limited", "Smales Trust"]:
     check_true(f"{_bad!r} is not a person", not _looks_like_person_name(_bad), _bad)
@@ -658,3 +656,11 @@ check_true("a fee row dated differently is not attached", attach_fx_merchants(_n
 
 _last = [_fx_rows()[0]]
 check_true("a conversion row with nothing beneath it is left as it is", attach_fx_merchants(_last) == 0)
+
+print("\n" + "=" * 62)
+if FAILURES:
+    print(f"FAILED ({len(FAILURES)}):")
+    for failure in FAILURES:
+        print("  -", failure)
+    sys.exit(1)
+print(f"All checks passed. {total} transactions across {len(all_batches)} synthetic layouts.")

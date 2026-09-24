@@ -3,14 +3,64 @@
 
 from __future__ import annotations
 
+import json
 import re
 
 from collections import defaultdict
 from datetime import date, datetime
+from functools import lru_cache
+from pathlib import Path
 from statistics import median
 from typing import Any
 
-from extract_normalize import collapse_merchant, descriptor_core
+from extract_normalize import (
+    collapse_merchant,
+    descriptor_core,
+    looks_like_payer_name,
+    normalize_merchant,
+)
+
+UTILITY_TYPES = frozenset({"power", "water", "gas", "internet", "phone_mobile", "other_utility"})
+INSURANCE_TYPES = frozenset({
+    "home_contents", "vehicle", "life_personal_risk", "medical_health", "pet", "funeral", "other_insurance"
+})
+INCOME_TYPES = frozenset({
+    "salary_wages", "benefit", "child_support_received", "rental_income",
+    "investment_income", "other_income", "business_receipts",
+})
+
+
+def _closed_subcategory(row: dict[str, Any]) -> str | None:
+    """Return only a subtype from the three closed classification enums."""
+    category = row.get("category")
+    if category == "utilities" and row.get("utility_type") in UTILITY_TYPES:
+        return str(row["utility_type"])
+    if category == "insurance" and row.get("insurance_type") in INSURANCE_TYPES:
+        return str(row["insurance_type"])
+    if category in INCOME and row.get("income_type") in INCOME_TYPES:
+        return str(row["income_type"])
+    return None
+
+
+def _review_type(category: str, business_flag: str) -> str | None:
+    if category == "unclear":
+        return "unclear"
+    if category == "underwriter_manual":
+        return "underwriter_manual"
+    if business_flag in {"yes", "review"}:
+        return "business_review"
+    return None
+
+
+def _income_regularity(frequency: str, observations: int) -> str:
+    """Closed display rule: one-off lacks evidence; unknown is not assessable."""
+    if frequency == "unknown":
+        return "not_assessable"
+    if frequency == "one_off" or observations < 2:
+        return "insufficient_observations"
+    if frequency == "irregular":
+        return "irregular"
+    return "regular"
 
 RECOMMENDED = frozenset(
     {
@@ -499,6 +549,134 @@ def _index_classifications(
     return out
 
 
+# Merchant memory. The model is handed 238 merchants and, on a real binder,
+# hands back 67-115 of them; everything it leaves out lands in the ledger as
+# unclear, and repair passes do not reliably close the gap. A merchant's
+# nature does not change between runs, so a classification an underwriter has
+# already accepted is a better default than "unclear" - but it is only a
+# default: whatever the model sends for a row always wins.
+#
+# Scope is the guard against leaking one applicant into another. A shop
+# (DIDI, a car park, a supermarket) is the same shop for everyone, so a
+# household outflow category travels. Anything that describes the applicant
+# rather than the merchant - who pays them, who they pay, what counts as
+# their business - is pinned to the statement files it was learned from.
+MERCHANT_MEMORY_PATH = Path(__file__).with_name("merchant_memory.json")
+GLOBAL_MEMORY_CATEGORIES = frozenset({
+    "transport", "utilities", "insurance", "food_grocery_clothing_personal_care",
+    "recreation_entertainment", "monthly_subscriptions", "education",
+    "childcare_child_support", "rent_board_paid", "medical", "extracurricular",
+})
+_MEMORY_FIELDS = (
+    "category", "include_in_living_expenses", "is_business", "business_reason",
+    "utility_type", "insurance_type", "income_type",
+)
+
+
+def memory_keys_for_descriptor(description: str) -> set[str]:
+    """Join keys a raw statement descriptor produces under TODAY's normaliser.
+
+    Memory stores the descriptors it learned from, not the keys, because the
+    normaliser keeps improving: since the 2026-09-17 run it began stripping
+    `- :` time residue and folding `PAK N SAVE` to `PAK SAVE`, and every key
+    frozen at that date stopped matching. Re-keying at load time means a
+    normaliser change can never silently switch the memory off.
+    """
+    return {
+        k for k in (
+            merchant_join_key(normalize_merchant(description)),
+            merchant_join_key(description),
+        ) if k
+    }
+
+
+@lru_cache(maxsize=4)
+def load_merchant_memory(path: str | None = None) -> dict[tuple[str, str], dict[str, Any]]:
+    """(join key, direction) -> remembered classification. Empty if no file."""
+    source = Path(path) if path else MERCHANT_MEMORY_PATH
+    if not source.is_file():
+        return {}
+    data = json.loads(source.read_text(encoding="utf-8"))
+    candidates: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for entry in data.get("entries") or []:
+        direction = str(entry.get("direction") or "")
+        if direction not in {"inflow", "outflow"} or entry.get("category") in {None, "unclear"}:
+            continue
+        keys = {str(entry.get("key") or "").upper().strip()} - {""}
+        for descriptor in entry.get("descriptors") or []:
+            keys |= memory_keys_for_descriptor(descriptor)
+        for key in keys:
+            candidates[(key, direction)].append(entry)
+    # Two remembered merchants that now fold onto one key but disagree are a
+    # guess either way; leave that key to the model rather than pick one.
+    return {
+        key: entries[0]
+        for key, entries in candidates.items()
+        if len({(e["category"], e.get("is_business")) for e in entries}) == 1
+    }
+
+
+def memory_classification(
+    txn: dict[str, Any], memory: dict[tuple[str, str], dict[str, Any]]
+) -> dict[str, Any] | None:
+    """A classification row for `txn` from memory, or None.
+
+    Tries the same keys the model join uses, so a remembered merchant matches
+    exactly the rows a model classification for it would have matched.
+    """
+    direction = str(txn.get("direction") or "")
+    if not memory or direction not in {"inflow", "outflow"}:
+        return None
+    keys = dict.fromkeys(
+        k for k in (
+            merchant_join_key(txn.get("merchant_normalized")),
+            merchant_join_key(txn.get("description")),
+            str(txn.get("merchant_normalized") or "").upper().strip(),
+        ) if k
+    )
+    for key in keys:
+        entry = memory.get((key, direction))
+        if entry is None:
+            continue
+        files = entry.get("source_files")
+        if files and str(txn.get("source_file") or "") not in files:
+            continue
+        row = {field: entry[field] for field in _MEMORY_FIELDS if entry.get(field) is not None}
+        row["reason"] = f"merchant memory: {entry.get('reason') or entry['category']}"
+        return row
+    return None
+
+
+def payer_classification(txn: dict[str, Any]) -> dict[str, Any] | None:
+    """Side-business takings for an inflow under a person's name, or None.
+
+    Memory can only speak for merchants an accepted run already saw, which
+    makes it useless for the payers of the next applicant - and their payers
+    are the bulk of what a side business looks like on a statement. This is
+    the general form of the same call: it reads the shape of the name instead
+    of matching a remembered one, so it works on a binder the engine has
+    never processed.
+
+    Only inflows. `ZHANG,MENG` arriving is revenue; the same name leaving is
+    the applicant paying somebody, and calling that revenue would both invent
+    income and hide a living expense.
+    """
+    if str(txn.get("direction") or "") != "inflow":
+        return None
+    for field in ("merchant_normalized", "description"):
+        value = str(txn.get(field) or "").strip()
+        if value and looks_like_payer_name(value):
+            return {
+                "category": "business_receipts",
+                "is_business": "yes",
+                "income_type": "business_receipts",
+                "include_in_living_expenses": False,
+                "business_reason": "inflow under a person's name",
+                "reason": "payer name: side-business gross receipts, not net profit",
+            }
+    return None
+
+
 def _liability_rows(
     accounts: list[dict[str, Any]], joined: list[dict[str, Any]],
     calculations: list[dict[str, Any]],
@@ -815,15 +993,69 @@ def evidence_gaps(
     return gaps
 
 
+# A repair pass can only fix what it can see. The HTTP layer drops `part2`
+# from the Chat response because the full ledger is too big for the tool
+# channel, which left the agent reading `join_miss_rows: 91` with no way to
+# learn WHICH merchants missed - so it had nothing to re-classify and the
+# unclear rows stayed unclear. This is the same list keyed by merchant
+# instead of by row: a few hundred bytes per merchant rather than per
+# transaction, which is small enough to survive the slimming.
+UNCLASSIFIED_MERCHANT_CAP = 120
+
+
+def unclassified_merchants(joined: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Distinct merchants whose rows came out of the join unclassified.
+
+    Direction is carried because it changes the answer: an unclassified
+    *inflow* from a person's name is side-business takings, while the same
+    name on an outflow is not. Truncated descriptor, not the whole row.
+    """
+    buckets: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in joined:
+        if row.get("classified") or row.get("direction") == "info":
+            continue
+        merchant = str(row.get("merchant_normalized") or "").strip()
+        descriptor = str(row.get("description") or "").strip()
+        if not merchant and not descriptor:
+            continue
+        direction = str(row.get("direction") or "outflow")
+        key = (merchant or descriptor, direction)
+        bucket = buckets.get(key)
+        if bucket is None:
+            entry = {"merchant": key[0], "direction": direction, "rows": 1}
+            # Only carry the raw descriptor when the normalised merchant has
+            # thrown something away. Repeating the same string twice per
+            # merchant is what pushes this list back out of the tool channel.
+            if not descriptor.upper().startswith(key[0].upper()):
+                entry["example"] = descriptor[:48]
+            buckets[key] = entry
+        else:
+            bucket["rows"] += 1
+    ordered = sorted(buckets.values(), key=lambda b: (-b["rows"], b["merchant"]))
+    return ordered[:UNCLASSIFIED_MERCHANT_CAP]
+
+
 def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) -> dict[str, Any]:
     txns = canonical.get("transactions") or []
     by_id = _index_classifications(classifications, txns)
     accounts = canonical.get("accounts") or []
     assessment_date = canonical.get("assessment_date") or classifications.get("assessment_date")
+    memory = (
+        load_merchant_memory()
+        if classifications.get("use_merchant_memory", True)
+        else {}
+    )
 
     joined = []
     for txn in txns:
         cls = by_id.get(txn["transaction_id"])
+        source = "model" if isinstance(cls, dict) and cls else None
+        if source is None:
+            cls = memory_classification(txn, memory)
+            source = "memory" if cls else None
+        if source is None:
+            cls = payer_classification(txn)
+            source = "payer_name" if cls else None
         classified = isinstance(cls, dict) and bool(cls)
         cls = cls or {}
         category = cls.get("category") or "unclear"
@@ -852,12 +1084,24 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "model_include": bool(cls.get("include_in_living_expenses")),
                 "suggested_frequency": cls.get("suggested_frequency") or "unknown",
                 "merchant_normalized": merchant,
+                # Merchant-nature risk only, and only from the closed enum.
+                # Anything else the model puts here is dropped rather than
+                # rendered to an underwriter as a flagged transaction.
+                "risk_flag": (
+                    str(cls.get("risk_flag") or "").strip().lower()
+                    if str(cls.get("risk_flag") or "").strip().lower()
+                    in {"gambling", "payday_high_cost_lending", "bnpl_arrears"}
+                    else None
+                ),
                 "is_business": business_flag,
                 "business_reason": str(cls.get("business_reason") or "").strip(),
                 "reason": reason,
                 "classified": classified,
+                "classification_source": source,
+                "confidence": cls.get("confidence") if source == "model" else None,
                 "utility_type": cls.get("utility_type"),
                 "insurance_type": cls.get("insurance_type"),
+                "income_type": cls.get("income_type"),
                 "account_id": resolved_account or txn.get("account_id"),
             }
         )
@@ -1101,6 +1345,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     "amount_observed": typical,
                     "frequency": freq,
                     "monthly_equivalent": round(monthly_equivalent(typical, freq if freq != "unknown" else "irregular"), 2),
+                    "regularity": _income_regularity(freq, len(rows)),
                     "evidence": ", ".join(sorted({r["date"] for r in rows})),
                 }
             )
@@ -1200,8 +1445,11 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                     "exclusion_reason": exclusion,
                     "reason": r.get("reason") or "",
                     "classified": bool(r.get("classified")),
-                    "needs_review": category in {"unclear", "underwriter_manual"}
-                    or business_flag in {"yes", "review"},
+                    "merchant": r.get("merchant_normalized") or None,
+                    "confidence": r.get("confidence"),
+                    "subcategory": _closed_subcategory(r),
+                    "review_type": _review_type(category, business_flag),
+                    "needs_review": _review_type(category, business_flag) is not None,
                     "is_business": business_flag,
                 }
             )
@@ -1225,6 +1473,10 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 "exclusion_reason": "duplicate extraction (descriptions match after bank prefix/suffix strip)",
                 "reason": r.get("reason") or "",
                 "classified": bool(r.get("classified")),
+                "merchant": r.get("merchant_normalized") or None,
+                "confidence": r.get("confidence"),
+                "subcategory": _closed_subcategory(r),
+                "review_type": None,
                 "needs_review": True,
                 "is_business": r.get("is_business") or "no",
             }
@@ -1336,6 +1588,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             "amount_observed": round(total, 2),
             "frequency": "irregular",
             "monthly_equivalent": round(total / months, 2),
+            "regularity": _income_regularity("irregular", len(credits)),
             "gross_net": (
                 "GROSS RECEIPTS - not net profit. Excluded from assessable income; "
                 "obtain business financials."
@@ -1463,7 +1716,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             },
         )
 
-    return {
+    result = {
         "assessment_date": assessment_date,
         "applicant": applicant,
         "accounts": accounts,
@@ -1524,6 +1777,35 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
                 if not r.get("classified") and r.get("direction") != "info"
             ),
             "classified_rows": sum(1 for r in joined if r.get("classified")),
+            # Rows the model left out that merchant memory filled. Counted
+            # inside classified_rows; reported apart so a reader can see how
+            # much of the file rests on an earlier run rather than this one.
+            "memory_filled_rows": sum(
+                1 for r in joined
+                if r.get("classification_source") == "memory" and r.get("direction") != "info"
+            ),
+            # New payer names are deliberately not remembered. This is the
+            # generic inflow rule's contribution on the current binder.
+            "payer_name_filled_rows": sum(
+                1 for r in joined
+                if r.get("classification_source") == "payer_name"
+                and r.get("direction") != "info"
+            ),
+            # The names behind join_miss_rows, so a repair pass has something
+            # to act on after the HTTP layer drops part2. Capped; the count
+            # above stays authoritative.
+            "unclassified_merchants": unclassified_merchants(joined),
+            "unclassified_merchants_truncated": len(
+                {
+                    (
+                        str(r.get("merchant_normalized") or "").strip()
+                        or str(r.get("description") or "").strip(),
+                        str(r.get("direction") or "outflow"),
+                    )
+                    for r in joined
+                    if not r.get("classified") and r.get("direction") != "info"
+                }
+            ) > UNCLASSIFIED_MERCHANT_CAP,
             "side_business_gross_monthly": round(
                 sum(
                     float(r.get("monthly_equivalent") or 0)
@@ -1538,3 +1820,7 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             "business_classification_missing": business_classification_missing,
         },
     }
+    from report_view_fields import build_observed_fields  # noqa: E402
+
+    result.update(build_observed_fields(canonical, joined, accounts, result))
+    return result

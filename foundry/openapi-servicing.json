@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Vikas lender servicing tools",
-    "version": "0.2.0",
-    "description": "Extract NZ bank statements, compute servicing totals in code, render Excel. The model classifies only. v0.2 adds applicant, document_index, conduct, part2_calculations, part4, subtype_breakdowns, and annualised part5."
+    "version": "0.3.2",
+    "description": "Extract NZ bank statements, compute servicing totals in code, render Excel and/or the AIA HTML lender report. The model classifies only. v0.3.2 omits part2/part3/part2_calculations/report_view from compute_summary HTTP by default (use summary_id + render_report)."
   },
   "servers": [
     {
@@ -212,6 +212,26 @@
                   "merge_classifications": {
                     "type": "boolean",
                     "description": "Set true on a repair pass. The server keeps the classifications it has already been given for this batch_id and merges in what you send now, so send ONLY the merchants you just worked out - not the ones you decided earlier. Resending the whole set on every retry is what exhausts your context window on a real binder. Last write wins, so correcting an entry means sending that one entry again. Requires batch_id."
+                  },
+                  "include_report_view": {
+                    "type": "boolean",
+                    "description": "Scripts only. If true, the response includes the full report_view. Agents must omit this and use summary_id + render_report."
+                  },
+                  "include_part2": {
+                    "type": "boolean",
+                    "description": "Scripts only. If true, the response includes the full part2 ledger. Agents must omit this: a real binder's part2 is hundreds of kilobytes and Foundry tool_server_errors on it. Use summary_id + render_report. The default response has part2_omitted=true and part2_row_count."
+                  },
+                  "include_part3": {
+                    "type": "boolean",
+                    "description": "Scripts only. If true, the response includes part3 one-offs. Agents must omit this and use summary_id + render_report."
+                  },
+                  "include_part2_calculations": {
+                    "type": "boolean",
+                    "description": "Scripts only. If true, the response includes part2_calculations. Agents must omit this and use summary_id + render_report."
+                  },
+                  "include_full_summary": {
+                    "type": "boolean",
+                    "description": "Scripts only. If true, skip all Chat slimming and return every array. Agents must omit this."
                   }
                 }
               }
@@ -229,6 +249,32 @@
                     "summary_id": {
                       "type": "string",
                       "description": "Server-side id for this summary. Pass it to render_report as `summary_id` INSTEAD of `summary`."
+                    },
+                    "part2_omitted": {
+                      "type": "boolean",
+                      "description": "True on the default Chat response. The full part2 ledger is on summary_id, not in this body."
+                    },
+                    "part2_row_count": {
+                      "type": "integer",
+                      "description": "How many part2 line items were stored. Use this instead of reading part2."
+                    },
+                    "report_view_omitted": {
+                      "type": "boolean",
+                      "description": "True on the default Chat response. render_report loads report_view from summary_id."
+                    },
+                    "part3_omitted": {
+                      "type": "boolean",
+                      "description": "True on the default Chat response. part3 one-offs stay on summary_id."
+                    },
+                    "part3_row_count": {
+                      "type": "integer"
+                    },
+                    "part2_calculations_omitted": {
+                      "type": "boolean",
+                      "description": "True on the default Chat response. Merchant calculations stay on summary_id."
+                    },
+                    "part2_calculations_row_count": {
+                      "type": "integer"
                     }
                   }
                 }
@@ -241,7 +287,7 @@
     "/render_report": {
       "post": {
         "operationId": "render_report",
-        "summary": "Write lender-assessment.xlsx from a stored compute_summary result and return a download URL. Pass `summary_id`, not `summary`. Give the returned download_url to the user.",
+        "summary": "Write the lender report from a stored compute_summary result and return a download URL. Pass `summary_id`, not `summary`. Default format is xlsx. Set format=html or format=both when the user also wants the HTML lender report. Give every returned download_url to the user.",
         "requestBody": {
           "required": true,
           "content": {
@@ -262,7 +308,12 @@
                   },
                   "filename": {
                     "type": "string",
-                    "description": "Optional output name. Defaults to lender-assessment.xlsx."
+                    "description": "Optional output stem or name. Extension is forced from format. Defaults to lender-assessment.xlsx / lender-assessment.html."
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": ["xlsx", "html", "both"],
+                    "description": "xlsx (default, existing callers) returns the workbook. html returns the filled AIA lender report. both publishes both; top-level download_url stays the xlsx and html_download_url is the HTML."
                   },
                   "include_base64": {
                     "type": "boolean",
@@ -275,7 +326,7 @@
         },
         "responses": {
           "200": {
-            "description": "Download link for the rendered workbook",
+            "description": "Download link for the rendered report",
             "content": {
               "application/json": {
                 "schema": {
@@ -286,7 +337,7 @@
                     },
                     "download_url": {
                       "type": "string",
-                      "description": "Short-lived read link. Give this to the user verbatim."
+                      "description": "Short-lived read link. Give this to the user verbatim. For format=both this is the xlsx."
                     },
                     "expires_at": {
                       "type": "string",
@@ -297,6 +348,21 @@
                     },
                     "status": {
                       "type": "string"
+                    },
+                    "format": {
+                      "type": "string",
+                      "enum": ["xlsx", "html"]
+                    },
+                    "html_filename": {
+                      "type": "string",
+                      "description": "Present when format=both."
+                    },
+                    "html_download_url": {
+                      "type": "string",
+                      "description": "Present when format=both. Give this to the user verbatim."
+                    },
+                    "html_size_bytes": {
+                      "type": "integer"
                     }
                   }
                 }

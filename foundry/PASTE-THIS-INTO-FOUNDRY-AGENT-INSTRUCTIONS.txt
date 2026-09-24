@@ -70,7 +70,26 @@ Each entry:
 merchant (verbatim) | category | include_in_living_expenses | confidence
 reason (no arithmetic) | suggested_frequency | is_business | business_reason
 insurance_type if insurance | utility_type if utilities | income_type if income
+risk_flag only if the merchant is one of the three named below
 ```
+
+**`risk_flag`** is optional and answers one question: what kind of business
+is this merchant. Exactly three values, nothing else:
+
+- `gambling` - casino, TAB, pokies, betting site
+- `payday_high_cost_lending` - payday lender, truck-shop style high-cost credit
+- `bnpl_arrears` - a buy-now-pay-later *late or default* charge, not an
+  ordinary BNPL instalment
+
+**Do not use it for fees or cash.** Dishonour, overdraft and late-payment
+fees, and cash withdrawals over $500, are found in code by reading the
+statement text - the engine already flags them, and a second opinion from
+you would double-count them on the report.
+
+**Omit it when none applies.** This is not a field to fill in for
+completeness: every value you set is rendered to a loan underwriter as a
+flagged transaction against a real applicant. Silence costs nothing, a
+guess costs someone their mortgage.
 
 Use `transaction_id` instead of `merchant` only when one row truly differs
 from the rest of that merchant. Never invent ids. Schema has
@@ -205,6 +224,19 @@ again with **`merge_classifications: true`** and **only the entries you just
 worked out**. The server keeps what you sent before and merges; resending the
 whole set is what exhausts your context window. `classification_store` in the
 response tells you what it now holds.
+
+**`audit.unclassified_merchants` is the list to work from.** The response no
+longer carries `part2` - the full ledger is too big for the tool channel, so
+it is kept on `summary_id` for the renderer instead. That leaves
+`join_miss_rows` as a bare count, and a count is not something you can
+repair. `audit.unclassified_merchants` is that same set keyed by merchant:
+each entry gives `merchant`, `direction`, how many `rows` it covers, and an
+`example` descriptor when the normalised name dropped something. Classify
+those merchants. **`direction` decides the answer** - an unclassified
+*inflow* under a person's name is side-business takings
+(`business_receipts`), while the same name on an *outflow* is not. If
+`unclassified_merchants_truncated` is true the list was capped; repair what
+it gives you and call again, the next response names the rest.
 
 Repeat that while `audit.join_miss_rows` is falling, up to three passes. When
 rows remain unresolved, **render anyway** and say so in the closing summary:

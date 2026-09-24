@@ -1,0 +1,535 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vikas.local/schemas/report-view.schema.json",
+  "title": "LenderReportView",
+  "description": "Presentation contract shared by the lender XLSX and HTML renderers. All arithmetic is supplied by code; renderers do not recalculate totals or monthly equivalents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "meta",
+    "observed_cashflow",
+    "servicing",
+    "category_breakdown",
+    "income_sources",
+    "recurring_commitments",
+    "risk_flags",
+    "manual_review",
+    "ledger",
+    "exceptions"
+  ],
+  "properties": {
+    "meta": { "$ref": "#/$defs/meta" },
+    "observed_cashflow": { "$ref": "#/$defs/observedCashflow" },
+    "servicing": { "$ref": "#/$defs/servicing" },
+    "category_breakdown": { "$ref": "#/$defs/categoryBreakdown" },
+    "income_sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/incomeSource" }
+    },
+    "recurring_commitments": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recurringCommitment" }
+    },
+    "risk_flags": { "$ref": "#/$defs/riskFlags" },
+    "manual_review": { "$ref": "#/$defs/manualReview" },
+    "ledger": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ledgerItem" }
+    },
+    "exceptions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/exception" }
+    }
+  },
+  "$defs": {
+    "money": {
+      "type": "number",
+      "description": "NZD amount stored as a JSON number, not formatted text."
+    },
+    "nullableMoney": {
+      "type": ["number", "null"],
+      "description": "NZD amount, or null when the source statement does not provide it."
+    },
+    "maskedAccount": {
+      "type": "string",
+      "pattern": "^(?:••••|\\*\\*\\*\\*|XXXX)[0-9]{0,4}$",
+      "description": "Masked account display containing four mask characters and at most the last four available digits; no earlier digit may be visible."
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["binder", "statement"]
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["inflow", "outflow", "info"]
+    },
+    "frequency": {
+      "type": "string",
+      "enum": ["weekly", "fortnightly", "monthly", "quarterly", "annual", "irregular", "one_off", "unknown"]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "transport",
+        "utilities",
+        "insurance",
+        "food_grocery_clothing_personal_care",
+        "recreation_entertainment",
+        "monthly_subscriptions",
+        "education",
+        "kiwisaver_savings_investments",
+        "childcare_child_support",
+        "donations_tithings",
+        "rent_board_paid",
+        "medical",
+        "extracurricular",
+        "other",
+        "one_off",
+        "internal_transfer",
+        "credit_card_repayment",
+        "loan_repayment",
+        "mortgage_repayment",
+        "interest_charge",
+        "redraw",
+        "income_credit",
+        "reimbursement",
+        "salary_wages",
+        "benefit",
+        "child_support_received",
+        "rental_income",
+        "investment_income",
+        "other_income",
+        "business_receipts",
+        "underwriter_manual",
+        "unclear"
+      ]
+    },
+    "subcategory": {
+      "description": "Closed subtype set. Null means the category has no defined subtype; arbitrary model-authored strings are not allowed.",
+      "enum": [
+        null,
+        "power",
+        "water",
+        "gas",
+        "internet",
+        "phone_mobile",
+        "other_utility",
+        "home_contents",
+        "vehicle",
+        "life_personal_risk",
+        "medical_health",
+        "pet",
+        "funeral",
+        "other_insurance",
+        "salary_wages",
+        "benefit",
+        "child_support_received",
+        "rental_income",
+        "investment_income",
+        "other_income",
+        "business_receipts"
+      ]
+    },
+    "incomeCategory": {
+      "type": "string",
+      "enum": [
+        "salary_wages",
+        "benefit",
+        "child_support_received",
+        "rental_income",
+        "investment_income",
+        "other_income",
+        "business_receipts"
+      ]
+    },
+    "vendorSource": {
+      "description": "Closed provenance type for merchant identification. The URL, when any, is stored separately.",
+      "enum": [null, "cache", "pattern", "companies_office", "nzbn", "web", "manual", "unresolved"]
+    },
+    "reviewType": {
+      "type": "string",
+      "enum": ["unclear", "underwriter_manual", "business_review"]
+    },
+    "riskRuleId": {
+      "type": "string",
+      "enum": [
+        "dishonour_fee",
+        "overdraft_fee",
+        "late_payment_fee",
+        "cash_withdrawal_over_500",
+        "gambling",
+        "payday_high_cost_lending",
+        "bnpl_arrears"
+      ]
+    },
+    "riskSeverity": {
+      "type": "string",
+      "enum": ["review", "high"]
+    },
+    "policyBucket": {
+      "type": "string",
+      "enum": ["essential", "discretionary", "savings_giving", "excluded", "manual"]
+    },
+    "regularity": {
+      "type": "string",
+      "enum": ["regular", "irregular", "insufficient_observations", "not_assessable"]
+    },
+    "reconciliationStatus": {
+      "type": "string",
+      "enum": ["balanced", "out_of_balance", "not_assessable"]
+    },
+    "accountMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "account_id",
+        "institution",
+        "masked_account",
+        "period_start",
+        "period_end",
+        "opening_balance_nzd",
+        "closing_balance_nzd",
+        "source_files"
+      ],
+      "properties": {
+        "account_id": { "type": "string", "minLength": 1 },
+        "institution": { "type": "string", "minLength": 1 },
+        "masked_account": { "$ref": "#/$defs/maskedAccount" },
+        "period_start": { "type": "string", "format": "date" },
+        "period_end": { "type": "string", "format": "date" },
+        "opening_balance_nzd": { "$ref": "#/$defs/nullableMoney" },
+        "closing_balance_nzd": { "$ref": "#/$defs/nullableMoney" },
+        "source_files": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "report_title",
+        "source_files",
+        "institutions",
+        "masked_account",
+        "period_start",
+        "period_end",
+        "generated_at",
+        "accounts"
+      ],
+      "properties": {
+        "scope": { "$ref": "#/$defs/scope" },
+        "report_title": { "type": "string", "minLength": 1 },
+        "source_files": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "institutions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "masked_account": {
+          "description": "Single-statement header value. Binder reports may set null and render the masked values in accounts[].",
+          "oneOf": [
+            { "$ref": "#/$defs/maskedAccount" },
+            { "type": "null" }
+          ]
+        },
+        "period_start": { "type": "string", "format": "date" },
+        "period_end": { "type": "string", "format": "date" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "accounts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/accountMeta" }
+        }
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "account_id",
+        "status",
+        "opening_balance_nzd",
+        "total_inflows_nzd",
+        "total_outflows_nzd",
+        "expected_closing_balance_nzd",
+        "reported_closing_balance_nzd",
+        "difference_nzd"
+      ],
+      "properties": {
+        "account_id": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/reconciliationStatus" },
+        "opening_balance_nzd": { "$ref": "#/$defs/nullableMoney" },
+        "total_inflows_nzd": { "$ref": "#/$defs/money" },
+        "total_outflows_nzd": { "$ref": "#/$defs/money" },
+        "expected_closing_balance_nzd": { "$ref": "#/$defs/nullableMoney" },
+        "reported_closing_balance_nzd": { "$ref": "#/$defs/nullableMoney" },
+        "difference_nzd": { "$ref": "#/$defs/nullableMoney" }
+      }
+    },
+    "observedCashflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Raw observed cash movement for the report period, in NZD over the whole period. These are not monthly servicing figures and must not be substituted for fields under servicing.",
+      "required": [
+        "total_inflows_nzd",
+        "total_outflows_nzd",
+        "net_movement_nzd",
+        "observation_months",
+        "reconciliations"
+      ],
+      "properties": {
+        "total_inflows_nzd": {
+          "type": "number",
+          "description": "Raw NZD inflows observed over the complete report period; not monthly equivalent income."
+        },
+        "total_outflows_nzd": {
+          "type": "number",
+          "description": "Raw NZD outflows observed over the complete report period; not recommended monthly living expenses."
+        },
+        "net_movement_nzd": {
+          "type": "number",
+          "description": "Raw report-period inflows minus raw report-period outflows, in NZD; not a servicing surplus."
+        },
+        "observation_months": { "type": "number", "exclusiveMinimum": 0 },
+        "reconciliations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reconciliation" }
+        }
+      }
+    },
+    "servicing": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Monthly-equivalent servicing figures in NZD per month. They are calculated by code and are deliberately separate from observed_cashflow report-period totals.",
+      "required": [
+        "assessable_income_monthly_nzd",
+        "recommended_living_monthly_nzd",
+        "savings_giving_monthly_nzd",
+        "business_expenses_monthly_nzd",
+        "side_business_gross_monthly_nzd"
+      ],
+      "properties": {
+        "assessable_income_monthly_nzd": { "$ref": "#/$defs/money" },
+        "recommended_living_monthly_nzd": { "$ref": "#/$defs/money" },
+        "savings_giving_monthly_nzd": { "$ref": "#/$defs/money" },
+        "business_expenses_monthly_nzd": { "$ref": "#/$defs/money" },
+        "side_business_gross_monthly_nzd": { "$ref": "#/$defs/money" }
+      }
+    },
+    "categoryBreakdownRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "label",
+        "observed_total_nzd",
+        "monthly_equivalent_nzd",
+        "percent_of_denominator",
+        "policy_bucket",
+        "essential"
+      ],
+      "properties": {
+        "category": { "$ref": "#/$defs/category" },
+        "label": { "type": "string", "minLength": 1 },
+        "observed_total_nzd": { "$ref": "#/$defs/money" },
+        "monthly_equivalent_nzd": { "$ref": "#/$defs/money" },
+        "percent_of_denominator": { "type": "number", "minimum": 0, "maximum": 100 },
+        "policy_bucket": { "$ref": "#/$defs/policyBucket" },
+        "essential": { "type": "boolean" }
+      }
+    },
+    "categoryBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["denominator_nzd", "denominator_policy", "essential_percent", "discretionary_percent", "rows"],
+      "properties": {
+        "denominator_nzd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Raw observed household outflows used for category percentages, after excluding info, extraction duplicates, transfers, debt, income and business rows."
+        },
+        "denominator_policy": {
+          "type": "string",
+          "enum": ["observed_household_outflows"]
+        },
+        "essential_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "discretionary_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "rows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/categoryBreakdownRow" }
+        }
+      }
+    },
+    "incomeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "income_type", "dominant_amount_nzd", "frequency", "monthly_equivalent_nzd", "regularity", "evidence"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "income_type": { "$ref": "#/$defs/incomeCategory" },
+        "dominant_amount_nzd": { "$ref": "#/$defs/money" },
+        "frequency": { "$ref": "#/$defs/frequency" },
+        "monthly_equivalent_nzd": { "$ref": "#/$defs/money" },
+        "regularity": { "$ref": "#/$defs/regularity" },
+        "evidence": { "type": "string", "minLength": 1 }
+      }
+    },
+    "recurringCommitment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["merchant", "category", "dominant_amount_nzd", "frequency", "monthly_impact_nzd", "essential"],
+      "properties": {
+        "merchant": { "type": "string", "minLength": 1 },
+        "category": { "$ref": "#/$defs/category" },
+        "dominant_amount_nzd": { "$ref": "#/$defs/money" },
+        "frequency": { "$ref": "#/$defs/frequency" },
+        "monthly_impact_nzd": { "$ref": "#/$defs/money" },
+        "essential": { "type": "boolean" }
+      }
+    },
+    "riskFlag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transaction_id", "date", "description", "amount_nzd", "rule_id", "severity", "reason"],
+      "properties": {
+        "transaction_id": { "type": "string", "minLength": 1 },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string", "minLength": 1 },
+        "amount_nzd": { "$ref": "#/$defs/money" },
+        "rule_id": { "$ref": "#/$defs/riskRuleId" },
+        "severity": { "$ref": "#/$defs/riskSeverity" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "riskFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "rows"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "rows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/riskFlag" }
+        }
+      }
+    },
+    "manualReviewBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_type", "transaction_id", "date", "description", "amount_nzd", "reason", "confidence"],
+      "properties": {
+        "review_type": { "$ref": "#/$defs/reviewType" },
+        "transaction_id": { "type": "string", "minLength": 1 },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string", "minLength": 1 },
+        "amount_nzd": { "$ref": "#/$defs/money" },
+        "reason": { "type": "string", "minLength": 1 },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "manualReviewUnclear": {
+      "allOf": [
+        { "$ref": "#/$defs/manualReviewBase" },
+        { "properties": { "review_type": { "const": "unclear" } } }
+      ]
+    },
+    "manualReviewUnderwriter": {
+      "allOf": [
+        { "$ref": "#/$defs/manualReviewBase" },
+        { "properties": { "review_type": { "const": "underwriter_manual" } } }
+      ]
+    },
+    "manualReviewBusiness": {
+      "allOf": [
+        { "$ref": "#/$defs/manualReviewBase" },
+        { "properties": { "review_type": { "const": "business_review" } } }
+      ]
+    },
+    "manualReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unclear", "underwriter_manual", "business_review"],
+      "properties": {
+        "unclear": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/manualReviewUnclear" }
+        },
+        "underwriter_manual": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/manualReviewUnderwriter" }
+        },
+        "business_review": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/manualReviewBusiness" }
+        }
+      }
+    },
+    "ledgerItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transaction_id",
+        "date",
+        "description",
+        "amount_nzd",
+        "direction",
+        "category",
+        "source_file",
+        "merchant",
+        "confidence",
+        "subcategory",
+        "vendor_source",
+        "vendor_source_url"
+      ],
+      "properties": {
+        "transaction_id": { "type": "string", "minLength": 1 },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string", "minLength": 1 },
+        "amount_nzd": { "$ref": "#/$defs/money" },
+        "direction": { "$ref": "#/$defs/direction" },
+        "category": { "$ref": "#/$defs/category" },
+        "source_file": { "type": "string", "minLength": 1 },
+        "merchant": { "type": ["string", "null"] },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "subcategory": { "$ref": "#/$defs/subcategory" },
+        "vendor_source": { "$ref": "#/$defs/vendorSource" },
+        "vendor_source_url": {
+          "oneOf": [
+            { "type": "string", "format": "uri", "pattern": "^https://" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "exceptionType": {
+      "type": "string",
+      "enum": ["extraction", "reconciliation", "join_miss", "unresolved_vendor", "missing_evidence", "unreadable"]
+    },
+    "exceptionSeverity": {
+      "type": "string",
+      "enum": ["review", "error"]
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "severity", "description", "evidence"],
+      "properties": {
+        "type": { "$ref": "#/$defs/exceptionType" },
+        "severity": { "$ref": "#/$defs/exceptionSeverity" },
+        "description": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
