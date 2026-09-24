@@ -178,7 +178,7 @@ def test_the_same_name_leaving_is_not_revenue():
 
 
 def test_shipped_memory_file_carries_nothing_about_an_applicant():
-    """The reviewed exception file must carry no applicant information."""
+    """The brand fallback file must carry no applicant information."""
     from extract_normalize import looks_like_payer_name
 
     raw = json.load(open(os.path.join(ROOT, "function_app", "merchant_memory.json"), encoding="utf-8"))
@@ -195,7 +195,7 @@ def test_shipped_memory_file_carries_nothing_about_an_applicant():
         assert not re.search(pattern, blob, re.I), pattern
     print(
         "ok test_shipped_memory_file_carries_nothing_about_an_applicant "
-        f"({len(entries)} approved exceptions)"
+        f"({len(entries)} public brands)"
     )
 
 
@@ -259,6 +259,7 @@ def test_builder_learns_only_what_is_safe_to_replay():
         _txn("t4", "WESTLAKE GIRLS HIGH SCH", 70.0, "outflow"),
         _txn("t5", "FU MARKET", 10.0, "outflow", date="2026-06-02"),
         _txn("t6", "FU MARKET", 11.0, "outflow", date="2026-06-03"),
+        _txn("t7", "ANTHROPIC ANTHROPIC.COMCA", 30.0, "outflow"),
     ]}
     part2 = [
         {"transaction_id": "t1", "classified": True, "category": "transport", "include": True, "is_business": "no", "reason": "ride-hail"},
@@ -267,20 +268,20 @@ def test_builder_learns_only_what_is_safe_to_replay():
         {"transaction_id": "t4", "classified": True, "category": "education_childcare", "include": True, "is_business": "no", "reason": "school"},
         {"transaction_id": "t5", "classified": True, "category": "food_grocery_clothing_personal_care", "include": True, "is_business": "no", "reason": "grocer"},
         {"transaction_id": "t6", "classified": True, "category": "recreation_entertainment", "include": True, "is_business": "no", "reason": "cafe"},
+        {"transaction_id": "t7", "classified": True, "category": "monthly_subscriptions", "include": False, "is_business": "yes", "reason": "business tooling"},
     ]
-    unapproved = build(canonical, {"part2": part2}, "test")
-    assert unapproved["entries"] == [], unapproved["entries"]
-
-    memory = build(canonical, {"part2": part2}, "test", {"DIDI_NZ"})
+    memory = build(canonical, {"part2": part2}, "test")
     by_cat = {e["category"]: e for e in memory["entries"]}
     # The payer is no longer learned at all. It used to be written out
     # pinned to FILE_A, which made the file a record of who paid this
     # applicant and helped no other binder; the rule answers it instead.
-    assert set(by_cat) == {"transport"}, set(by_cat)
+    assert set(by_cat) == {"transport", "monthly_subscriptions"}, set(by_cat)
     assert "source_files" not in by_cat["transport"], "a shop should travel"
     assert not [e for e in memory["entries"] if e.get("source_files")], memory["entries"]
-    assert memory["unapproved_or_applicant_specific_skipped"] == 1
-    assert memory["approved_exception_keys"] == ["DIDI_NZ"]
+    assert memory["applicant_specific_skipped_count"] == 1
+    subscription = by_cat["monthly_subscriptions"]
+    assert subscription["is_business"] == "review", subscription
+    assert subscription["include_in_living_expenses"] is True, subscription
     assert memory["retired_categories_skipped_count"] == 1
     assert memory["conflicts_skipped_count"] == 1  # FU MARKET, two categories
     print("ok test_builder_learns_only_what_is_safe_to_replay")
@@ -291,8 +292,7 @@ def test_shipped_memory_file_loads_and_only_uses_live_categories():
     memory = cs.load_merchant_memory()
     schema = json.load(open(os.path.join(ROOT, "schemas", "classification.schema.json"), encoding="utf-8"))
     allowed = set(schema["$defs"]["category"]["enum"]) - {"unclear"}
-    # No merchant has yet been approved as a genuinely exceptional product
-    # rule. Empty is safer than silently learning one applicant's shops.
+    assert memory, "brand-only memory should provide the interim merchant fallback"
     bad = {e["category"] for e in memory.values()} - allowed
     assert not bad, bad
     print(f"ok test_shipped_memory_file_loads_and_only_uses_live_categories ({len(memory)} keys)")

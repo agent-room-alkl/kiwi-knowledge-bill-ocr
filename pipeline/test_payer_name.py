@@ -153,7 +153,7 @@ def test_no_payer_name_regex_carries_a_stray_control_character():
 
 
 def test_the_shipped_memory_holds_no_name_the_rule_would_recognise():
-    """Belt and braces: approved merchant exceptions cannot be payer names."""
+    """Belt and braces: the brand fallback cannot contain payer names."""
     path = os.path.join(ROOT, "function_app", "merchant_memory.json")
     raw = json.load(open(path, encoding="utf-8"))
     named = [

@@ -21,9 +21,9 @@ fixtures/samples/
 *.png
 out/
 
-# Merchant memory is a reviewed product configuration file. The builder emits
-# only explicitly approved exceptional keys and strips applicant-specific data,
-# so the safe result is committed and deployed from the same Git revision.
+# Merchant memory contains reusable public outflow brands only. The builder
+# strips applicant-specific data, so the safe result is committed and deployed
+# from the same Git revision; confirmed agent-recognisable brands can be pruned.
 
 # Material received from Vikas, not ours to publish in a public repo.
 from vikas/

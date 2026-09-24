@@ -14,14 +14,13 @@ Only rows the model actually classified are learned, and never `unclear`.
 A merchant that was put in two different categories within the run is left
 out rather than guessed.
 
-Only explicitly approved exceptional brand knowledge is written out - see
-`_is_approved_exception`. Nothing about the applicant is kept: no payer
-names, no statement filenames. Ordinary merchants are deliberately left to
-the agent; accepting a run must not silently turn every shop in that one
-applicant's statement into product configuration. Who paid the applicant is
-recognised at classification time from the shape of the name, by
-compute_summary.payer_classification, so it works on a binder this file has
-never seen.
+Only reusable public brand knowledge is written out - see `_is_public_brand`.
+Nothing about the applicant is kept: no payer names, no inflows, no statement
+filenames. Ordinary/sample brands remain as an interim fallback; after the
+agent has been shown to recognise one reliably, that entry can be removed.
+Who paid the applicant is recognised at classification time from the shape
+of the name, by compute_summary.payer_classification, so it works on a binder
+this file has never seen.
 """
 
 from __future__ import annotations
@@ -85,14 +84,12 @@ def _public_descriptor(description: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _is_approved_exception(
+def _is_public_brand(
     key: str,
     direction: str,
     category: str,
-    is_business: str,
-    approved_keys: frozenset[str],
 ) -> bool:
-    """True for merchant knowledge explicitly approved as a product exception.
+    """True for merchant knowledge that is safe to reuse across applicants.
 
     Memory used to keep everything the accepted run classified, pinning the
     applicant-specific part to the statement files it came from. That made
@@ -101,23 +98,19 @@ def _is_approved_exception(
     account number. It also did not generalise - the next applicant has
     different payers, so none of those entries could ever match again.
 
-    Public is necessary but not sufficient. Common brands such as DIDI and
-    supermarkets are the agent's job; learning them merely because they
-    appeared in one accepted run overfits the product to that sample. A key
-    must therefore be named explicitly by an underwriter/product owner as a
-    genuinely exceptional merchant before it is emitted. What is left needs
-    no pinning, which is why no entry carries source_files any more.
+    Public outflow brands remain as an interim fallback. Payer names and all
+    inflows are excluded, and what is left needs no file pinning, which is why
+    no entry carries source_files any more.
 
-    is_business is excluded because it is a judgement about one applicant,
-    not about the merchant: the same Anthropic subscription is a business
-    expense for one and a personal one for the next.
+    A brand may still be reusable when this applicant used it for business,
+    but that applicant-specific judgement is not. The builder keeps the
+    merchant category and rewrites business=yes to review + conservative
+    living-expense inclusion below.
     """
     return (
         direction == "outflow"
         and category in GLOBAL_MEMORY_CATEGORIES
-        and is_business != "yes"
         and not looks_like_payer_name(key)
-        and key.upper() in approved_keys
     )
 
 
@@ -132,15 +125,7 @@ def _schema_categories() -> frozenset:
     return frozenset(schema["$defs"]["category"]["enum"])
 
 
-def build(
-    canonical: dict,
-    summary: dict,
-    label: str,
-    approved_keys: set[str] | frozenset[str] | None = None,
-) -> dict:
-    approved = frozenset(
-        str(key).upper().strip() for key in (approved_keys or ()) if str(key).strip()
-    )
+def build(canonical: dict, summary: dict, label: str) -> dict:
     allowed = _schema_categories()
     txns = {t["transaction_id"]: t for t in canonical.get("transactions") or []}
     utility_type = _single_subtype(summary, "utilities", UTILITY_TYPES)
@@ -173,17 +158,24 @@ def build(
         if category not in allowed:
             retired.append({"key": key, "direction": direction, "category": category})
             continue
-        if not _is_approved_exception(key, direction, category, is_business, approved):
+        if not _is_public_brand(key, direction, category):
             private.append({"key": key, "direction": direction, "category": category})
             continue
         first = members[0][0]
+        applicant_business = is_business == "yes"
         entry = {
             "key": key,
             "direction": direction,
             "category": category,
-            "include_in_living_expenses": bool(first.get("include")),
-            "is_business": is_business,
-            "reason": str(first.get("reason") or "").strip() or category,
+            "include_in_living_expenses": (
+                True if applicant_business else bool(first.get("include"))
+            ),
+            "is_business": "review" if applicant_business else is_business,
+            "reason": (
+                f"{category} brand; business use needs current-applicant review"
+                if applicant_business
+                else str(first.get("reason") or "").strip() or category
+            ),
             "rows_seen": len(members),
             # Raw descriptors, so the loader can re-key them with whatever
             # the normaliser does on the day it runs.
@@ -211,8 +203,7 @@ def build(
         # sample-derived merchant/payer text back into the reviewed config.
         "conflicts_skipped_count": len(conflicts),
         "retired_categories_skipped_count": len(retired),
-        "unapproved_or_applicant_specific_skipped": len(private),
-        "approved_exception_keys": sorted(approved),
+        "applicant_specific_skipped_count": len(private),
     }
 
 
@@ -222,26 +213,16 @@ def main() -> int:
     ap.add_argument("summary")
     ap.add_argument("--out", default=str(ROOT / "function_app" / "merchant_memory.json"))
     ap.add_argument("--label", default="accepted run")
-    ap.add_argument(
-        "--approved-key",
-        action="append",
-        default=[],
-        help=(
-            "merchant join key explicitly approved as an exceptional product rule; "
-            "repeat for more than one. With none, rebuilt memory is intentionally empty"
-        ),
-    )
     args = ap.parse_args()
     canonical = json.loads(Path(args.canonical).read_text(encoding="utf-8"))
     summary = json.loads(Path(args.summary).read_text(encoding="utf-8"))
-    memory = build(canonical, summary, args.label, set(args.approved_key))
+    memory = build(canonical, summary, args.label)
     Path(args.out).write_text(
         json.dumps(memory, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
     print(
-        f"{len(memory['entries'])} approved merchant exceptions remembered; "
-        f"{memory['unapproved_or_applicant_specific_skipped']} skipped as "
-        "unapproved/applicant-specific, "
+        f"{len(memory['entries'])} reusable public brands remembered; "
+        f"{memory['applicant_specific_skipped_count']} skipped as applicant-specific, "
         f"{memory['conflicts_skipped_count']} skipped as conflicting, "
         f"{memory['retired_categories_skipped_count']} skipped for a retired category -> {args.out}"
     )

@@ -1,13 +1,1282 @@
 {
  "version": 1,
  "seeded_from": {
-  "label": "2026-09-17 accepted run; no exceptional merchants approved",
+  "label": "2026-09-17 accepted run; reusable public brands only",
   "assessment_date": "2026-09-17",
   "part2_rows": 471
  },
- "entries": [],
+ "entries": [
+  {
+   "key": "2DEGREES",
+   "direction": "outflow",
+   "category": "utilities",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "telecommunications service",
+   "rows_seen": 3,
+   "descriptors": [
+    "2DEGREES AUCKLAND"
+   ]
+  },
+  {
+   "key": "AA",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "motoring service",
+   "rows_seen": 1,
+   "descriptors": [
+    "AA ALBANY ALBANY"
+   ]
+  },
+  {
+   "key": "AA CONSTELLAT",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "motoring service",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D AA Constellat-16:48"
+   ]
+  },
+  {
+   "key": "ACE99 BAKERY",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "bakery prepared food",
+   "rows_seen": 2,
+   "descriptors": [
+    "ACE99 BAKERY"
+   ]
+  },
+  {
+   "key": "AGENT-ROOM.COM",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 7,
+   "descriptors": [
+    "AGENT-ROOM.C (USD 9.00 @ 0.57 ) (incl Currency Conversion Charge $0.20)",
+    "POS W/D AGENT-ROOM.COM AUCKLAND NZ 15.00USD @ 0.5624 conversion rate",
+    "POS W/D AGENT-ROOM.COM AUCKLAND NZ 15.00USD @ 0.5830 conversion rate",
+    "POS W/D AGENT-ROOM.COM AUCKLAND NZ 15.00USD @ 0.5862 conversion rate",
+    "POS W/D AGENT-ROOM.COM AUCKLAND NZ 3.00USD @ 0.5871 conversion rate",
+    "POS W/D AGENT-ROOM.COM AUCKLAND NZ 5.00USD @ 0.5631 conversion rate",
+    "POS W/D AGENT-ROOM.COM AUCKLAND NZ 5.00USD @ 0.5924 conversion rate"
+   ]
+  },
+  {
+   "key": "AINTERV.COM NZ USD @ CONVERSION RATE",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D AINTERV.COM AUCKLAND NZ 1.00USD @ 0.5848 conversion rate"
+   ]
+  },
+  {
+   "key": "AMAZON PRIME VIDEO",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "video subscription",
+   "rows_seen": 3,
+   "descriptors": [
+    "POS W/D AMAZON PRIME VIDEO NZ SINGAPORE SG"
+   ]
+  },
+  {
+   "key": "ANTHROPIC / CLAUDE",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 12,
+   "descriptors": [
+    "POS W/D 23.00USD @ 0.5671 conversion rate ANTHROPIC ANTHROPIC.COMCA",
+    "POS W/D 23.00USD @ 0.5760 conversion rate ANTHROPIC ANTHROPIC.COMCA",
+    "POS W/D 23.00USD @ 0.5775 conversion rate ANTHROPIC ANTHROPIC.COMCA",
+    "POS W/D 23.00USD @ 0.5810 conversion rate ANTHROPIC ANTHROPIC.COMCA",
+    "POS W/D 23.00USD @ 0.5855 conversion rate ANTHROPIC ANTHROPIC.COMCA",
+    "POS W/D 57.50USD @ 0.5843 conversion rate ANTHROPIC ANTHROPIC.COMCA",
+    "POS W/D ANTHROPIC ANTHROPIC.COMCAUS",
+    "POS W/D ANTHROPIC* CLAUDE SUB ANTHROPIC.COMCAUS",
+    "POS W/D CLAUDE.AI SUBSCRIPTION ANTHROPIC.COMCAUS"
+   ]
+  },
+  {
+   "key": "ASB A325032 ASB SUNNYNOO",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "cash withdrawal - purpose not printed, counted as living expense",
+   "rows_seen": 1,
+   "descriptors": [
+    "ASB A325032 ASB Sunnynoo k 122355"
+   ]
+  },
+  {
+   "key": "BADMINTON NORTH HARBOURAUCKLAND",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "sport and recreation",
+   "rows_seen": 2,
+   "descriptors": [
+    "BADMINTON NORTH HARBOURAUCKLAND"
+   ]
+  },
+  {
+   "key": "BARFOOT & THOMPSON LIMITED",
+   "direction": "outflow",
+   "category": "rent_board_paid",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "property manager rent payments",
+   "rows_seen": 8,
+   "descriptors": [
+    "PAY Barfoot & Thompson Limited"
+   ]
+  },
+  {
+   "key": "BOMB! FRIED SKEWERS",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food",
+   "rows_seen": 1,
+   "descriptors": [
+    "BOMB! FRIED SKEWERS AUCKLAND"
+   ]
+  },
+  {
+   "key": "BP 2GO TARGE",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle fuel",
+   "rows_seen": 1,
+   "descriptors": [
+    "BP 2GO TARGE"
+   ]
+  },
+  {
+   "key": "BP 2GO TARGET",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle fuel",
+   "rows_seen": 1,
+   "descriptors": [
+    "BP 2GO TARGET ROAD AUCKLAND"
+   ]
+  },
+  {
+   "key": "BP CONNECT",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle fuel",
+   "rows_seen": 1,
+   "descriptors": [
+    "BP CONNECT AUCKLAND"
+   ]
+  },
+  {
+   "key": "BURGER KING",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food",
+   "rows_seen": 2,
+   "descriptors": [
+    "Burger King"
+   ]
+  },
+  {
+   "key": "BURGER KING MAIRANGI BAY",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food",
+   "rows_seen": 5,
+   "descriptors": [
+    "Burger King Mairangi Bay"
+   ]
+  },
+  {
+   "key": "BURGER KING PARK",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food",
+   "rows_seen": 1,
+   "descriptors": [
+    "Burger King Wairau Park"
+   ]
+  },
+  {
+   "key": "CHARTWELL FO",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "food merchant purchase",
+   "rows_seen": 2,
+   "descriptors": [
+    "CHARTWELL FO"
+   ]
+  },
+  {
+   "key": "CHEMIST WAREH",
+   "direction": "outflow",
+   "category": "medical",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "pharmacy purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D CHEMIST WAREH-13:07"
+   ]
+  },
+  {
+   "key": "COCO FRESH TE",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "drinks merchant",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D COCO FRESH TE-14:22"
+   ]
+  },
+  {
+   "key": "COSTCO WHS",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "warehouse groceries and household goods",
+   "rows_seen": 1,
+   "descriptors": [
+    "Costco Whs Auckland C"
+   ]
+  },
+  {
+   "key": "COSTCO WHS AU",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "warehouse groceries and household goods",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D Costco Whs Au-14:10"
+   ]
+  },
+  {
+   "key": "CRACKERJACK",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "household discount retail",
+   "rows_seen": 1,
+   "descriptors": [
+    "CRACKERJACK GLENFIELD AUCKLAND"
+   ]
+  },
+  {
+   "key": "CURSOR.COM",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 4,
+   "descriptors": [
+    "POS W/D 20.00USD @ 0.5814 conversion rate CURSOR, AI POWERED IDE CURSOR.COM CA",
+    "POS W/D CURSOR, AI POWERED IDE CURSOR.COM CAUS"
+   ]
+  },
+  {
+   "key": "DA HUA SUPERMARKET",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "supermarket groceries",
+   "rows_seen": 1,
+   "descriptors": [
+    "Da Hua Supermarket A C"
+   ]
+  },
+  {
+   "key": "DIDI_NZ",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "ride-hail transport",
+   "rows_seen": 22,
+   "descriptors": [
+    "DIDI_NZ Auckland",
+    "DIDI_NZ DidiNZ pending Auckland"
+   ]
+  },
+  {
+   "key": "DOMINO'S PIZ",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food",
+   "rows_seen": 2,
+   "descriptors": [
+    "Domino's Piz"
+   ]
+  },
+  {
+   "key": "ELEVENLABS.IO ELEVENLABS.IONYUS",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D ELEVENLABS.IO ELEVENLABS.IONYUS"
+   ]
+  },
+  {
+   "key": "FARRO FRESH SMALES FARMAUCKLAND",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "supermarket groceries",
+   "rows_seen": 3,
+   "descriptors": [
+    "Farro Fresh Smales FarmAuckland"
+   ]
+  },
+  {
+   "key": "FU MARKET",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "food market purchases",
+   "rows_seen": 8,
+   "descriptors": [
+    "FU MARKET"
+   ]
+  },
+  {
+   "key": "GILMOURS",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "food_grocery_clothing_personal_care brand; business use needs current-applicant review",
+   "rows_seen": 3,
+   "descriptors": [
+    "GILMOURS NOR",
+    "GILMOURS NORTH SHORE C"
+   ]
+  },
+  {
+   "key": "GODADDY",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 3,
+   "descriptors": [
+    "POS W/D GODADDY#4110476878 AMSTERDAM NL",
+    "POS W/D GODADDY#4151580609 AMSTERDAM NL",
+    "POS W/D GODADDY#4162451490 AMSTERDAM NL"
+   ]
+  },
+  {
+   "key": "GOLDEN APPLE",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "food market purchases",
+   "rows_seen": 10,
+   "descriptors": [
+    "GOLDEN APPLE"
+   ]
+  },
+  {
+   "key": "GOLDEN APPLE GFIELD",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "food market purchases",
+   "rows_seen": 2,
+   "descriptors": [
+    "GOLDEN APPLE GFIELD AUCKLAND",
+    "GOLDEN APPLE GFIELD C"
+   ]
+  },
+  {
+   "key": "GONG CHA WESTFIELD ALBAAUCKLAND",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "drinks merchant",
+   "rows_seen": 1,
+   "descriptors": [
+    "GONG CHA WESTFIELD ALBAAUCKLAND"
+   ]
+  },
+  {
+   "key": "GOOGLE ONE",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "personal cloud subscription",
+   "rows_seen": 1,
+   "descriptors": [
+    "Google One Auckland"
+   ]
+  },
+  {
+   "key": "HOOP33 LIMIT",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "recreation venue",
+   "rows_seen": 1,
+   "descriptors": [
+    "HOOP33 LIMIT"
+   ]
+  },
+  {
+   "key": "IKEA RESTAUR",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant",
+   "rows_seen": 1,
+   "descriptors": [
+    "IKEA Restaur"
+   ]
+  },
+  {
+   "key": "JOBCOPILOT SINGAPORE",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D JOBCOPILOT SINGAPORE SG"
+   ]
+  },
+  {
+   "key": "JULIES RICE",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "grocery food purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "JULIES RICE"
+   ]
+  },
+  {
+   "key": "KMART",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "household and personal goods",
+   "rows_seen": 1,
+   "descriptors": [
+    "KMART ALBANY"
+   ]
+  },
+  {
+   "key": "KOGAN MOBILE 7WRVMQDR",
+   "direction": "outflow",
+   "category": "utilities",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "mobile service",
+   "rows_seen": 1,
+   "descriptors": [
+    "Kogan Mobile 7WRVMQDR Auckland"
+   ]
+  },
+  {
+   "key": "KOGAN MOBILE 9ENRRZTG",
+   "direction": "outflow",
+   "category": "utilities",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "mobile service",
+   "rows_seen": 1,
+   "descriptors": [
+    "Kogan Mobile 9ENRRZTG Auckland"
+   ]
+  },
+  {
+   "key": "KOGAN MOBILE YKYAYTQC",
+   "direction": "outflow",
+   "category": "utilities",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "mobile service",
+   "rows_seen": 1,
+   "descriptors": [
+    "Kogan Mobile YKYAYTQC Auckland"
+   ]
+  },
+  {
+   "key": "LUCKY BLISS TEA",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "drinks merchant",
+   "rows_seen": 1,
+   "descriptors": [
+    "Lucky Bliss Tea C"
+   ]
+  },
+  {
+   "key": "ME AND CHEF ORMISTON",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant or takeaway",
+   "rows_seen": 1,
+   "descriptors": [
+    "Me and Chef Ormiston C"
+   ]
+  },
+  {
+   "key": "MICROSOFT#G177359695 MSBILL.INFO",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D MICROSOFT#G177359695 MSBILL.INFO SG"
+   ]
+  },
+  {
+   "key": "MICROSOFT*STORE MSBILL.INFO",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D MICROSOFT*STORE MSBILL.INFO SG"
+   ]
+  },
+  {
+   "key": "MRWANGRICENOODLEHOTP",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant",
+   "rows_seen": 1,
+   "descriptors": [
+    "MrWangRiceNoodleHotP C"
+   ]
+  },
+  {
+   "key": "NYX*HOOP33",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "recreation venue",
+   "rows_seen": 2,
+   "descriptors": [
+    "NYX*HOOP33 L"
+   ]
+  },
+  {
+   "key": "NYX*HOOP33 LIMITED",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "recreation venue",
+   "rows_seen": 2,
+   "descriptors": [
+    "NYX*HOOP33 LIMITED Auckland"
+   ]
+  },
+  {
+   "key": "NZ TRANSPORT AGENCY-ECOPALMERSTON NO",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle licensing or road charges",
+   "rows_seen": 5,
+   "descriptors": [
+    "NZ TRANSPORT AGENCY-ECOPALMERSTON NO"
+   ]
+  },
+  {
+   "key": "OCTOPUS MOTOR",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "motor vehicle service",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D OCTOPUS MOTOR-10:24"
+   ]
+  },
+  {
+   "key": "ONE NZ PREPAY",
+   "direction": "outflow",
+   "category": "utilities",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "prepaid mobile service",
+   "rows_seen": 3,
+   "descriptors": [
+    "ONE NZ PREPAY AUCKLAND"
+   ]
+  },
+  {
+   "key": "PAK N SAVE FUEL PAK N SAVE FUEL",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle fuel",
+   "rows_seen": 1,
+   "descriptors": [
+    "PAK N SAVE FUEL WAIRAU PAK N SAVE FUEL"
+   ]
+  },
+  {
+   "key": "PAK SAVE",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "supermarket groceries",
+   "rows_seen": 15,
+   "descriptors": [
+    "PAK N SAVE W"
+   ]
+  },
+  {
+   "key": "PAK SAVE FUEL WAIR",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle fuel",
+   "rows_seen": 9,
+   "descriptors": [
+    "PAK N SAVE FUEL WAIR C"
+   ]
+  },
+  {
+   "key": "PANDA MART PA",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "food market purchases",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D PANDA MART PA-13:38"
+   ]
+  },
+  {
+   "key": "PAPER PLUS",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "household stationery purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "PAPER PLUS S"
+   ]
+  },
+  {
+   "key": "PARK",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "cash withdrawal - purpose not printed, counted as living expense",
+   "rows_seen": 2,
+   "descriptors": [
+    "ATM W/D Wairau Park A-16:09",
+    "ATM W/D Wairau Park A-20:49"
+   ]
+  },
+  {
+   "key": "PARKABLE* CONSTELLA",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "parking",
+   "rows_seen": 2,
+   "descriptors": [
+    "PARKABLE* 61 CONSTELLA AUCKLAND"
+   ]
+  },
+  {
+   "key": "PARKABLE* CONSTELLA MORNINGSIDE",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "parking",
+   "rows_seen": 1,
+   "descriptors": [
+    "PARKABLE* 61 CONSTELLA MORNINGSIDE"
+   ]
+  },
+  {
+   "key": "PARKABLE* PARKWAY",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "parking",
+   "rows_seen": 5,
+   "descriptors": [
+    "PARKABLE* 49 PARKWAY D AUCKLAND"
+   ]
+  },
+  {
+   "key": "PARKABLE* PARKWAY MORNINGSIDE",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "parking",
+   "rows_seen": 1,
+   "descriptors": [
+    "PARKABLE* 3945 PARKWAY MORNINGSIDE"
+   ]
+  },
+  {
+   "key": "PARTNERS LIFE LIMITED",
+   "direction": "outflow",
+   "category": "insurance",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "recurring insurance premium",
+   "rows_seen": 3,
+   "descriptors": [
+    "Direct Debit -PARTNERS LIFE LIMITED"
+   ],
+   "insurance_type": "life_personal_risk"
+  },
+  {
+   "key": "POTXPRESS NOR",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food merchant",
+   "rows_seen": 2,
+   "descriptors": [
+    "POS W/D PotXpress Nor-16:26",
+    "POS W/D PotXpress Nor-17:02"
+   ]
+  },
+  {
+   "key": "RL CATERING LTD",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "food_grocery_clothing_personal_care brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "PAY RL Catering LTD"
+   ]
+  },
+  {
+   "key": "SHAKE OUT TA",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food",
+   "rows_seen": 1,
+   "descriptors": [
+    "SHAKE OUT TA"
+   ]
+  },
+  {
+   "key": "SHAKE OUT TAKAPUNA TAKAPUNA",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "takeaway food",
+   "rows_seen": 1,
+   "descriptors": [
+    "SHAKE OUT TAKAPUNA TAKAPUNA"
+   ]
+  },
+  {
+   "key": "SHISANCHAO AU",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant or takeaway",
+   "rows_seen": 2,
+   "descriptors": [
+    "POS W/D Shisanchao Au-13:57",
+    "POS W/D Shisanchao Au-14:07"
+   ]
+  },
+  {
+   "key": "SMALES FARM PARKING",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "parking",
+   "rows_seen": 16,
+   "descriptors": [
+    "SMALES FARM PARKING AUCKLAND"
+   ]
+  },
+  {
+   "key": "SMZ*VAPE2GO",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "personal consumable purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "SMZ*VAPE2GO Albany Auckland"
+   ]
+  },
+  {
+   "key": "SMZ*W S FOODSTUFF LTDB2AUCKLAND",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "food_grocery_clothing_personal_care brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "SMZ*W S FOODSTUFF LTDb2Auckland"
+   ]
+  },
+  {
+   "key": "SUPER LIQUOR TARGET VALLEY",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "liquor purchases",
+   "rows_seen": 2,
+   "descriptors": [
+    "Super Liquor Target Rd Wairau Valley"
+   ]
+  },
+  {
+   "key": "SWEET TALK CA",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "cafe or drinks merchant",
+   "rows_seen": 2,
+   "descriptors": [
+    "POS W/D SWEET TALK CA-13:30",
+    "POS W/D SWEET TALK CA-16:20"
+   ]
+  },
+  {
+   "key": "TASCA DOMINIO",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D TASCA DOMINIO-18:04"
+   ]
+  },
+  {
+   "key": "TEAWHITE ALBA",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "cafe or drinks merchant",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D Teawhite Alba-16:23"
+   ]
+  },
+  {
+   "key": "THE HAMPER DE",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "food or gift hamper purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D THE HAMPER DE-16:10"
+   ]
+  },
+  {
+   "key": "TRANSPORT",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "Auckland Transport activity",
+   "rows_seen": 5,
+   "descriptors": [
+    "AUCKLAND TRANSPORT AUCKLAND"
+   ]
+  },
+  {
+   "key": "UNICHEM SUNNY",
+   "direction": "outflow",
+   "category": "medical",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "pharmacy purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D Unichem Sunny-12:56"
+   ]
+  },
+  {
+   "key": "UNIQUE DUMPLING",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant or takeaway",
+   "rows_seen": 2,
+   "descriptors": [
+    "Unique Dumpling C"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE ALIBABA CLOUD",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 34.50USD @ 0.5787 conversion rate ALIBABA CLOUD SG"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE E2B AI RUNTIME E2B.DEV CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 5.00USD @ 0.5862 conversion rate E2B - AI RUNTIME E2B.DEV CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE ELEVENLABS.IO ELEVENLABS.IONY",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 2,
+   "descriptors": [
+    "POS W/D 25.30USD @ 0.5625 conversion rate ELEVENLABS.IO ELEVENLABS.IONY",
+    "POS W/D 25.30USD @ 0.5832 conversion rate ELEVENLABS.IO ELEVENLABS.IONY"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE GITHUB, INC. GITHUB.COM CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 10.00USD @ 0.5760 conversion rate GITHUB, INC. GITHUB.COM CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE OPENAI *CHATGPT SUBSCR OPENAI.COM CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 9.20USD @ 0.5772 conversion rate OPENAI *CHATGPT SUBSCR OPENAI.COM CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE OPENAI OPENAI.COM CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 23.00USD @ 0.5922 conversion rate OPENAI OPENAI.COM CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE TWILIO INC WWW.TWILIO.COCA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 40.07USD @ 0.5775 conversion rate TWILIO INC WWW.TWILIO.COCA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE UPSTASH UPSTASH.COM CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 3,
+   "descriptors": [
+    "POS W/D 10.00USD @ 0.5663 conversion rate UPSTASH UPSTASH.COM CA",
+    "POS W/D 10.00USD @ 0.5848 conversion rate UPSTASH UPSTASH.COM CA",
+    "POS W/D 5.36USD @ 0.5923 conversion rate UPSTASH UPSTASH.COM CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE VERCEL INC. VERCEL.COM CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 3,
+   "descriptors": [
+    "POS W/D 20.00USD @ 0.5722 conversion rate VERCEL INC. VERCEL.COM CA",
+    "POS W/D 20.00USD @ 0.5816 conversion rate VERCEL INC. VERCEL.COM CA",
+    "POS W/D 20.00USD @ 0.5821 conversion rate VERCEL INC. VERCEL.COM CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE VERCEL MKT SUPABASE VERCEL.COM CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 2,
+   "descriptors": [
+    "POS W/D 25.00USD @ 0.5744 conversion rate VERCEL MKT SUPABASE VERCEL.COM CA",
+    "POS W/D 25.00USD @ 0.5852 conversion rate VERCEL MKT SUPABASE VERCEL.COM CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE VERCEL VERCEL.COM CA",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 20.88USD @ 0.5782 conversion rate VERCEL VERCEL.COM CA"
+   ]
+  },
+  {
+   "key": "USD @ CONVERSION RATE WORDLETIC.COM WORDLETIC.COMDE",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "POS W/D 34.90USD @ 0.5820 conversion rate WORDLETIC.COM WORDLETIC.COMDE"
+   ]
+  },
+  {
+   "key": "WAN FU YUAN",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant purchase",
+   "rows_seen": 1,
+   "descriptors": [
+    "WAN FU YUAN"
+   ]
+  },
+  {
+   "key": "WAN FU YUAN RESTAURA",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "restaurant",
+   "rows_seen": 2,
+   "descriptors": [
+    "Wan Fu Yuan Restaura C"
+   ]
+  },
+  {
+   "key": "WANG FOOD MARKET",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "food market purchases",
+   "rows_seen": 1,
+   "descriptors": [
+    "Wang Food Market Auckland"
+   ]
+  },
+  {
+   "key": "WANYUNET LTD",
+   "direction": "outflow",
+   "category": "monthly_subscriptions",
+   "include_in_living_expenses": true,
+   "is_business": "review",
+   "reason": "monthly_subscriptions brand; business use needs current-applicant review",
+   "rows_seen": 1,
+   "descriptors": [
+    "PAY Wanyunet ltd"
+   ]
+  },
+  {
+   "key": "WAREHOUSE STATIONERY 30AUCKLAND",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "household stationery purchases",
+   "rows_seen": 2,
+   "descriptors": [
+    "WAREHOUSE STATIONERY 30AUCKLAND"
+   ]
+  },
+  {
+   "key": "WOOLWORTHS",
+   "direction": "outflow",
+   "category": "food_grocery_clothing_personal_care",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "supermarket groceries",
+   "rows_seen": 6,
+   "descriptors": [
+    "WOOLWORTHS N",
+    "WOOLWORTHS NZ/SYCAMORE SUNNYNOOK"
+   ]
+  },
+  {
+   "key": "Z LAKESIDE",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle fuel",
+   "rows_seen": 2,
+   "descriptors": [
+    "POS W/D Z LAKESIDE Z -19:57",
+    "Z Lakeside"
+   ]
+  },
+  {
+   "key": "Z LAKESIDE TAKAPUNA",
+   "direction": "outflow",
+   "category": "transport",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "vehicle fuel",
+   "rows_seen": 1,
+   "descriptors": [
+    "Z Lakeside Takapuna"
+   ]
+  },
+  {
+   "key": "ZHA ZHA TEA",
+   "direction": "outflow",
+   "category": "recreation_entertainment",
+   "include_in_living_expenses": true,
+   "is_business": "no",
+   "reason": "drinks merchant",
+   "rows_seen": 1,
+   "descriptors": [
+    "ZHA ZHA TEA C"
+   ]
+  }
+ ],
  "conflicts_skipped_count": 0,
  "retired_categories_skipped_count": 4,
- "unapproved_or_applicant_specific_skipped": 234,
- "approved_exception_keys": []
+ "applicant_specific_skipped_count": 131
 }
