@@ -201,7 +201,21 @@ az functionapp create \
 
 ## Step 6: Configure Function App Settings
 
-Configure these **7 required application settings**. Never commit these values to git.
+The Function App requires **three platform-managed settings** (automatically configured by Azure) and **four operator-provided settings** (you must configure these). Two additional settings are optional overrides.
+
+### 6.1 Platform-Managed Settings (Automatic)
+
+These settings are automatically configured by Azure when you create the Function App and should **not** be manually overwritten:
+
+- `AzureWebJobsStorage`: Function App internal storage (set during `az functionapp create` via `--storage-account`)
+- `APPLICATIONINSIGHTS_CONNECTION_STRING`: Telemetry connection string (set during `az functionapp create` via `--app-insights`)
+- `DEPLOYMENT_STORAGE_CONNECTION_STRING`: Deployment-managed storage (may be set by Azure deployment infrastructure)
+
+⚠️ **Do not overwrite these values** unless you intentionally want to redirect the Function App to different infrastructure.
+
+### 6.2 Operator-Provided Settings (Required)
+
+Configure these **four required settings** that the function code reads:
 
 ```bash
 FUNC_APP_NAME="vikas-servicing-fn"
@@ -211,31 +225,40 @@ az functionapp config appsettings set \
   --name "$FUNC_APP_NAME" \
   --resource-group "$RG_NAME" \
   --settings \
-    "AzureWebJobsStorage=<paste-storage-connection-string>" \
     "STATEMENTS_STORAGE_CONNECTION_STRING=<paste-storage-connection-string>" \
     "DOCUMENTINTELLIGENCE_ENDPOINT=<paste-DI-endpoint>" \
     "DOCUMENTINTELLIGENCE_KEY=<paste-DI-key>" \
-    "APPLICATIONINSIGHTS_CONNECTION_STRING=<paste-appinsights-connection-string>" \
-    "EXTRACT_ALLOWED_BINDERS=vikas-samples" \
-    "REPORTS_CONTAINER=vikas-reports" \
-    "BATCHES_CONTAINER=vikas-batches"
+    "EXTRACT_ALLOWED_BINDERS=vikas-samples"
+```
+
+### 6.3 Optional Container Name Overrides
+
+By default, the function code uses `vikas-batches` and `vikas-reports` as container names. Only configure these if you created containers with different names:
+
+```bash
+# Optional: Only if you used different container names
+az functionapp config appsettings set \
+  --name "$FUNC_APP_NAME" \
+  --resource-group "$RG_NAME" \
+  --settings \
+    "BATCHES_CONTAINER=your-custom-batches-name" \
+    "REPORTS_CONTAINER=your-custom-reports-name"
 ```
 
 ### Application Setting Reference
 
-| Setting Name | Description | Example Value |
-|---|---|---|
-| `AzureWebJobsStorage` | Function App internal storage connection string | `DefaultEndpointsProtocol=https;AccountName=...` |
-| `STATEMENTS_STORAGE_CONNECTION_STRING` | Statement storage account connection string (same as above) | `DefaultEndpointsProtocol=https;AccountName=...` |
-| `DOCUMENTINTELLIGENCE_ENDPOINT` | Document Intelligence resource endpoint | `https://kiwi-docs.cognitiveservices.azure.com/` |
-| `DOCUMENTINTELLIGENCE_KEY` | Document Intelligence API key | `<32-character-hex-key>` |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | `InstrumentationKey=...` |
-| `EXTRACT_ALLOWED_BINDERS` | Comma-separated list of allowed container names | `vikas-samples` or `vikas-samples,prod-statements` |
-| `REPORTS_CONTAINER` | Container for published reports (optional, defaults to `vikas-reports`) | `vikas-reports` |
-| `BATCHES_CONTAINER` | Container for batch storage (optional, defaults to `vikas-batches`) | `vikas-batches` |
-
-**Optional settings:**
-- `EXTRACT_URL_ALLOWED_HOSTS`: Comma-separated allowed URL hosts for `file_urls` fallback (defaults to `*.blob.core.windows.net`)
+| Setting Name | Type | Description | Example Value |
+|---|---|---|---|
+| `AzureWebJobsStorage` | Platform-managed | Function App internal storage | `DefaultEndpointsProtocol=https;AccountName=...` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Platform-managed | Application Insights telemetry | `InstrumentationKey=...;IngestionEndpoint=...` |
+| `DEPLOYMENT_STORAGE_CONNECTION_STRING` | Platform-managed | Deployment infrastructure storage (if present) | `DefaultEndpointsProtocol=https;AccountName=...` |
+| `STATEMENTS_STORAGE_CONNECTION_STRING` | **Operator-provided (required)** | Statement storage account connection string | `DefaultEndpointsProtocol=https;AccountName=...` |
+| `DOCUMENTINTELLIGENCE_ENDPOINT` | **Operator-provided (required)** | Document Intelligence resource endpoint | `https://kiwi-docs.cognitiveservices.azure.com/` |
+| `DOCUMENTINTELLIGENCE_KEY` | **Operator-provided (required)** | Document Intelligence API key | `<32-character-hex-key>` |
+| `EXTRACT_ALLOWED_BINDERS` | **Operator-provided (required)** | Comma-separated list of allowed container names | `vikas-samples` or `vikas-samples,prod-statements` |
+| `BATCHES_CONTAINER` | Optional override | Container for batch storage (defaults to `vikas-batches`) | `vikas-batches` |
+| `REPORTS_CONTAINER` | Optional override | Container for published reports (defaults to `vikas-reports`) | `vikas-reports` |
+| `EXTRACT_URL_ALLOWED_HOSTS` | Optional override | Comma-separated allowed URL hosts for `file_urls` fallback (defaults to `*.blob.core.windows.net`) | `*.blob.core.windows.net` |
 
 ⚠️ **Security:** NEVER commit connection strings, keys, or SAS tokens to the repository.
 
@@ -328,7 +351,19 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
 
 ## Step 9: Azure AI Foundry Setup
 
-### 9.1 Create AI Foundry Project
+### 9.1 Prerequisites: Assign Required Foundry Roles
+
+Before configuring the Foundry agent, ensure your Azure account has the necessary permissions on the AI Foundry project:
+
+1. Navigate to your AI Foundry project in Azure Portal
+2. Go to **Access Control (IAM)** → **+ Add role assignment**
+3. Assign the following roles to your user account:
+   - **Azure AI Foundry User**: Allows using the Foundry agent and calling models
+   - **Azure AI Foundry Project Manager**: Allows creating and managing connections (required for PROJECT CONNECTION setup in Step 10.3)
+
+**Why these roles are required:** Microsoft Foundry OpenAPI authentication requires creating a PROJECT CONNECTION to pass the Function key securely to the OpenAPI tool. Without the Project Manager role, you cannot create or manage connections.
+
+### 9.2 Create AI Foundry Project
 
 1. Navigate to **Azure AI Foundry** at https://ai.azure.com
 2. Select your subscription and create a new **AI Hub** (if you don't have one)
@@ -336,25 +371,32 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
    - Name: `kiwi-knowage-proj` (or your preferred name)
    - Region: Same as your Function App (e.g., `australiaeast`)
 
-### 9.2 Deploy Chat Model
+### 9.3 Deploy Chat Model with OpenAPI Tool Support
+
+⚠️ **CRITICAL:** Not all models/regions support OpenAPI tools. You must select a model and region combination that supports **function calling** and **OpenAPI tool execution**.
 
 1. In your AI Foundry project, go to **Deployments** → **+ Create deployment**
-2. Select your preferred model (e.g., `gpt-4o`, `gpt-4-turbo`, or `gpt-3.5-turbo`)
+2. Select a model that supports OpenAPI tools:
+   - **Recommended:** `gpt-4o`, `gpt-4-turbo` (both support OpenAPI tools in most regions)
+   - **Check regional availability** at [Azure OpenAI model availability](https://learn.microsoft.com/azure/ai-services/openai/concepts/models)
 3. Configure:
-   - Deployment name: `gpt-5` or your chosen name
-   - Model version: Latest available
-   - Tokens per minute rate limit: Set according to your needs
+   - **Deployment name:** Use a name that matches the model (e.g., `gpt-4o` for gpt-4o model, `gpt-4-turbo` for gpt-4-turbo)
+     - ⚠️ **Do NOT name a non-gpt-4o deployment `gpt-5`** - keep deployment names consistent with the actual model
+   - **Model version:** Latest available
+   - **Region:** Choose a region where the model supports OpenAPI tools (e.g., `eastus`, `westeurope`, `australiaeast`)
+   - **Tokens per minute rate limit:** Set according to your needs
 4. **Deploy** and wait for the deployment to complete
+5. **Verify OpenAPI tool support:** Test a simple function-calling prompt in the playground to confirm the deployment can invoke tools
 
-### 9.3 Create the Agent
+### 9.4 Create the Agent
 
 1. In your AI Foundry project, go to **Agents** → **+ Create agent**
 2. Configure:
    - Name: `vikas-agent-demo` (or your preferred name)
-   - Model deployment: Select the deployment you created above
+   - Model deployment: Select the deployment you created above (must support OpenAPI tools)
    - Description: "NZ bank statement servicing assessment agent"
 
-### 9.4 Paste Agent Instructions
+### 9.5 Paste Agent Instructions
 
 **⚠️ CRITICAL STEP:** The agent instructions define how the model classifies transactions and calls the functions.
 
@@ -411,7 +453,9 @@ This step connects your Foundry agent to the three Azure Functions you deployed.
    - **Description:** `Extract NZ bank statements, compute servicing totals in code, render Excel and HTML reports. The model classifies only; never invents Part 1 numbers.`
    - **OpenAPI Specification:** Copy the **entire contents** of your updated `foundry/openapi-servicing.json` and paste it
 
-### 10.3 Configure Authentication
+### 10.3 Configure Authentication with PROJECT CONNECTION
+
+Microsoft Foundry OpenAPI authentication requires creating a **PROJECT CONNECTION** whose custom key name/value match the OpenAPI security scheme.
 
 The OpenAPI spec defines a security scheme `functionsKey`:
 
@@ -425,13 +469,39 @@ The OpenAPI spec defines a security scheme `functionsKey`:
 }
 ```
 
-In Foundry:
-1. Set **Authentication type** to **API Key**
-2. Configure:
-   - **Header name:** `x-functions-key`
-   - **API key value:** Paste your Function App default function key from Step 7.2
+#### 10.3.1 Create a PROJECT CONNECTION
 
-**Alternative for production:** Use Managed Identity authentication if your Foundry project and Function App support it.
+1. In your AI Foundry project, go to **Settings** → **Connections** (or **Connected resources**)
+2. Click **+ New connection** or **+ Add connection**
+3. Select **Custom** or **API Key** connection type
+4. Configure the connection:
+   - **Connection name:** `kiwi-function-auth` (or your preferred name)
+   - **Authentication type:** Custom API Key
+   - **Key name:** `x-functions-key` (must exactly match the OpenAPI `securitySchemes.functionsKey.name`)
+   - **Key value:** Paste your Function App default function key from Step 7.2
+5. **Save** the connection
+
+⚠️ **Critical:** The key name `x-functions-key` must match the OpenAPI security scheme's `name` field exactly. Mismatched names will result in 401 authentication errors.
+
+#### 10.3.2 Select the Connection for the OpenAPI Tool
+
+1. Return to your agent's **Tools** or **Actions** configuration
+2. Find the `vikas_servicing` OpenAPI tool you created in Step 10.2
+3. In the **Authentication** section:
+   - Set **Authentication type** to **Connection** (or **Use connection**)
+   - Select the connection you created: `kiwi-function-auth`
+4. **Save** the tool configuration
+
+#### 10.3.3 Verify the Connection
+
+1. Confirm the connection shows as **Connected** or **Active**
+2. Test authentication by running a simple agent query (see Step 11 for test procedures)
+3. If you receive 401 errors, verify:
+   - The connection key name is exactly `x-functions-key`
+   - The key value matches the Function App key from Step 7.2
+   - The connection is selected in the tool's authentication settings
+
+**Alternative for production:** Use Managed Identity authentication if your Foundry project and Function App support it (requires additional Azure RBAC configuration).
 
 ### 10.4 Verify Tool Attachment
 
@@ -450,7 +520,7 @@ In Foundry:
 
 ### 11.1 Upload Test Statements
 
-Upload sample statement PDFs to your `vikas-samples` container (or whichever container you configured in `EXTRACT_ALLOWED_BINDERS`):
+Upload **synthetic or test** statement PDFs to your `vikas-samples` container (or whichever container you configured in `EXTRACT_ALLOWED_BINDERS`):
 
 ```bash
 # Using Azure CLI
@@ -461,7 +531,14 @@ az storage blob upload \
   --connection-string "$STORAGE_CONN"
 ```
 
-**Note:** Use synthetic/test statements only. Never upload files containing real customer names or personal information.
+⚠️ **CRITICAL - Data Policy Requirements:**
+
+- ✓ **Synthetic data is REQUIRED** for smoke tests, demonstrations, and development
+- ✓ **Production statements** containing real customer data must ONLY be stored in controlled private storage under organizational data governance policies
+- ✗ **Real PII is PROHIBITED** from Git, public repositories, and uncontrolled storage accounts
+- The service **CAN process real customer data** in production when deployed with appropriate access controls, encryption, and compliance policies - this prohibition applies only to test/demo environments and source control
+
+**For this deployment guide:** Use only synthetic test data that mimics the structure of real statements but contains no real customer names, account numbers, or personal information.
 
 ### 11.2 Test Chat - Excel Output
 
@@ -567,11 +644,16 @@ If a deployment fails:
 
 1. Find the previous deployment ID:
 ```bash
-az webapp deployment list \
+az webapp log deployment list \
   --name vikas-servicing-fn \
-  --resource-group rg-kiwi-demo \
-  --query "[].{id:id, status:status, active:active, receivedTime:receivedTime}" \
-  --output table
+  --resource-group rg-kiwi-demo
+```
+
+Or view deployment history in the Azure Portal:
+```bash
+az webapp deployment list-publishing-profiles \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo
 ```
 
 2. Re-deploy the last known-good commit:
@@ -621,15 +703,18 @@ Use this checklist to confirm your deployment is complete:
 - [ ] Storage account created with three containers (`samples`, `batches`, `reports`)
 - [ ] Document Intelligence resource created and credentials obtained
 - [ ] Function App created with App Service Plan and Application Insights
-- [ ] All 7 application settings configured
+- [ ] Azure AI Foundry User and Project Manager roles assigned
+- [ ] Four required operator-provided application settings configured (`STATEMENTS_STORAGE_CONNECTION_STRING`, `DOCUMENTINTELLIGENCE_ENDPOINT`, `DOCUMENTINTELLIGENCE_KEY`, `EXTRACT_ALLOWED_BINDERS`)
 - [ ] Functions published successfully (`func azure functionapp publish`)
 - [ ] Smoke tests pass (HTTP 400 on empty body, not 404/500)
-- [ ] AI Foundry project created with model deployed
+- [ ] AI Foundry project created with OpenAPI-tool-capable model deployed
+- [ ] Model deployment name matches actual model (e.g., `gpt-4o`, not generic names like `gpt-5`)
 - [ ] Foundry agent created with instructions pasted from `PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt`
-- [ ] OpenAPI service attached with correct server URL and Function key auth
+- [ ] PROJECT CONNECTION created with key name `x-functions-key` and Function App key value
+- [ ] OpenAPI service attached with correct server URL and connection selected
 - [ ] End-to-end test produces xlsx download URL
 - [ ] End-to-end test produces html download URL (when `format=html` or `format=both`)
-- [ ] Test statements uploaded to samples container
+- [ ] Synthetic test statements uploaded to samples container (no real PII)
 - [ ] No secrets committed to repository
 
 ---
@@ -648,15 +733,19 @@ This diagram shows the complete architecture:
          │   Azure AI Foundry Agent   │
          │  ┌──────────────────────┐  │
          │  │ Model Deployment     │  │  ← Instructions from
-         │  │ (gpt-4o, etc)        │  │    PASTE-THIS-INTO-FOUNDRY-
+         │  │ (gpt-4o, gpt-4-turbo)│  │    PASTE-THIS-INTO-FOUNDRY-
          │  └──────────────────────┘  │    AGENT-INSTRUCTIONS.txt
          │  ┌──────────────────────┐  │
          │  │ OpenAPI Custom Tool  │  │  ← openapi-servicing.json
          │  │ (vikas_servicing)    │  │
          │  └──────────────────────┘  │
+         │  ┌──────────────────────┐  │
+         │  │ PROJECT CONNECTION   │  │  ← x-functions-key
+         │  │ (authentication)     │  │    (key name must match)
+         │  └──────────────────────┘  │
          └────────────┬───────────────┘
-                      │ Function-key auth (x-functions-key header)
-                      │ ⚠️ NEVER commit keys to git
+                      │ Auth via PROJECT CONNECTION
+                      │ (key name: x-functions-key)
                       ▼
          ┌────────────────────────────┐
          │  Azure Function App        │
@@ -695,10 +784,15 @@ DATA FLOW:
   Data/Response:   DI/Blob → Functions → Agent → xlsx/HTML download URL
 
 SECRETS: Never commit to git
-  - Function keys (x-functions-key for OpenAPI auth)
+  - Function keys (stored in PROJECT CONNECTION)
   - Storage connection strings
   - Document Intelligence keys
   - SAS tokens
+
+AUTHENTICATION: Requires PROJECT CONNECTION
+  - Connection key name: x-functions-key (must match OpenAPI spec)
+  - Connection key value: Function App default key
+  - Requires Azure AI Foundry Project Manager role to create connection
 ```
 
 ---

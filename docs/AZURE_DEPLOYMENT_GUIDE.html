@@ -392,9 +392,9 @@
 
         <div class="architecture-diagram">
             <h2>System Architecture</h2>
-            <svg viewBox="0 0 1000 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="arch-title arch-desc">
+            <svg viewBox="0 0 1000 950" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="arch-title arch-desc">
                 <title id="arch-title">Azure Deployment Architecture Diagram</title>
-                <desc id="arch-desc">Shows the flow from user/Foundry chat through AI Foundry Agent to Azure Functions, Document Intelligence, and Blob Storage, with data flowing back as xlsx/HTML reports. Highlights that secrets never go in git.</desc>
+                <desc id="arch-desc">Shows the flow from user/Foundry chat through AI Foundry Agent (with PROJECT CONNECTION authentication) to Azure Functions, Document Intelligence, and Blob Storage, with data flowing back as xlsx/HTML reports. Highlights that secrets never go in git and authentication requires PROJECT CONNECTION.</desc>
                 
                 <defs>
                     <style>
@@ -425,109 +425,114 @@
                 <text x="500" y="65" text-anchor="middle" class="small-text">Initiate assessment requests</text>
 
                 <!-- AI Foundry Agent -->
-                <rect x="250" y="120" width="500" height="150" class="box-agent" rx="5"/>
+                <rect x="250" y="120" width="500" height="185" class="box-agent" rx="5"/>
                 <text x="500" y="145" text-anchor="middle" class="title-text">Azure AI Foundry Agent</text>
                 
                 <rect x="270" y="160" width="210" height="50" class="box" rx="3"/>
                 <text x="375" y="180" text-anchor="middle" class="sub-text">Model Deployment</text>
-                <text x="375" y="197" text-anchor="middle" class="small-text">(gpt-4o, gpt-4-turbo, etc)</text>
+                <text x="375" y="197" text-anchor="middle" class="small-text">(gpt-4o, gpt-4-turbo)</text>
 
                 <rect x="520" y="160" width="210" height="50" class="box" rx="3"/>
                 <text x="625" y="180" text-anchor="middle" class="sub-text">OpenAPI Custom Tool</text>
                 <text x="625" y="197" text-anchor="middle" class="small-text">(vikas_servicing)</text>
 
-                <text x="500" y="235" text-anchor="middle" class="small-text">Instructions from: PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</text>
-                <text x="500" y="253" text-anchor="middle" class="small-text">OpenAPI spec: openapi-servicing.json</text>
+                <rect x="270" y="220" width="460" height="35" class="box" rx="3"/>
+                <text x="500" y="238" text-anchor="middle" class="small-text">PROJECT CONNECTION (x-functions-key)</text>
+                <text x="500" y="250" text-anchor="middle" class="small-text" style="font-size: 10px;">Requires: Azure AI Foundry Project Manager role</text>
 
-                <!-- Function-key auth -->
-                <rect x="350" y="285" width="300" height="30" fill="#fff3cd" stroke="#ff9800" stroke-width="1" rx="3"/>
-                <text x="500" y="305" text-anchor="middle" class="small-text" fill="#856404">Function-key auth (x-functions-key header)</text>
+                <text x="500" y="275" text-anchor="middle" class="small-text">Instructions: PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</text>
+                <text x="500" y="288" text-anchor="middle" class="small-text">OpenAPI spec: openapi-servicing.json</text>
+
+                <!-- Authentication note -->
+                <rect x="300" y="320" width="400" height="30" fill="#e1f5ff" stroke="#0078d4" stroke-width="1" rx="3"/>
+                <text x="500" y="340" text-anchor="middle" class="small-text" fill="#0078d4">Auth via PROJECT CONNECTION (key name must match OpenAPI spec)</text>
 
                 <!-- Azure Function App -->
-                <rect x="200" y="340" width="600" height="200" class="box-func" rx="5"/>
-                <text x="500" y="365" text-anchor="middle" class="title-text">Azure Function App</text>
-                <text x="500" y="383" text-anchor="middle" class="small-text">/api prefix</text>
+                <rect x="200" y="365" width="600" height="200" class="box-func" rx="5"/>
+                <text x="500" y="390" text-anchor="middle" class="title-text">Azure Function App</text>
+                <text x="500" y="408" text-anchor="middle" class="small-text">/api prefix</text>
 
-                <rect x="230" y="400" width="170" height="45" class="box" rx="3"/>
-                <text x="315" y="418" text-anchor="middle" class="sub-text">extract_and_normalize</text>
-                <text x="315" y="433" text-anchor="middle" class="small-text">PDF → canonical rows</text>
+                <rect x="230" y="425" width="170" height="45" class="box" rx="3"/>
+                <text x="315" y="443" text-anchor="middle" class="sub-text">extract_and_normalize</text>
+                <text x="315" y="458" text-anchor="middle" class="small-text">PDF → canonical rows</text>
 
-                <rect x="415" y="400" width="170" height="45" class="box" rx="3"/>
-                <text x="500" y="418" text-anchor="middle" class="sub-text">compute_summary</text>
-                <text x="500" y="433" text-anchor="middle" class="small-text">classifications → totals</text>
+                <rect x="415" y="425" width="170" height="45" class="box" rx="3"/>
+                <text x="500" y="443" text-anchor="middle" class="sub-text">compute_summary</text>
+                <text x="500" y="458" text-anchor="middle" class="small-text">classifications → totals</text>
 
-                <rect x="600" y="400" width="170" height="45" class="box" rx="3"/>
-                <text x="685" y="418" text-anchor="middle" class="sub-text">render_report</text>
-                <text x="685" y="433" text-anchor="middle" class="small-text">summary → xlsx/HTML</text>
+                <rect x="600" y="425" width="170" height="45" class="box" rx="3"/>
+                <text x="685" y="443" text-anchor="middle" class="sub-text">render_report</text>
+                <text x="685" y="458" text-anchor="middle" class="small-text">summary → xlsx/HTML</text>
 
-                <text x="500" y="465" text-anchor="middle" class="small-text">Three HTTP endpoints</text>
-                <text x="500" y="483" text-anchor="middle" class="small-text">App Settings: 7 required (DOCUMENTINTELLIGENCE_*, STATEMENTS_STORAGE_*, etc)</text>
-                <text x="500" y="501" text-anchor="middle" class="small-text">Application Insights: Telemetry and logging</text>
+                <text x="500" y="490" text-anchor="middle" class="small-text">Three HTTP endpoints</text>
+                <text x="500" y="508" text-anchor="middle" class="small-text">App Settings: 3 platform-managed + 4 operator-provided</text>
+                <text x="500" y="526" text-anchor="middle" class="small-text">Application Insights: Telemetry and logging</text>
 
                 <!-- Document Intelligence -->
-                <rect x="50" y="600" width="350" height="120" class="box-di" rx="5"/>
-                <text x="225" y="625" text-anchor="middle" class="title-text">Document Intelligence</text>
-                <text x="225" y="645" text-anchor="middle" class="sub-text">prebuilt-layout OCR</text>
-                <text x="225" y="675" text-anchor="middle" class="small-text">DOCUMENTINTELLIGENCE_ENDPOINT</text>
-                <text x="225" y="693" text-anchor="middle" class="small-text">DOCUMENTINTELLIGENCE_KEY</text>
+                <rect x="50" y="625" width="350" height="120" class="box-di" rx="5"/>
+                <text x="225" y="650" text-anchor="middle" class="title-text">Document Intelligence</text>
+                <text x="225" y="670" text-anchor="middle" class="sub-text">prebuilt-layout OCR</text>
+                <text x="225" y="700" text-anchor="middle" class="small-text">DOCUMENTINTELLIGENCE_ENDPOINT</text>
+                <text x="225" y="718" text-anchor="middle" class="small-text">DOCUMENTINTELLIGENCE_KEY</text>
 
                 <!-- Blob Storage -->
-                <rect x="450" y="600" width="500" height="250" class="box-blob" rx="5"/>
-                <text x="700" y="625" text-anchor="middle" class="title-text">Blob Storage</text>
-                <text x="700" y="645" text-anchor="middle" class="sub-text">STATEMENTS_STORAGE_CONNECTION_STRING</text>
+                <rect x="450" y="625" width="500" height="250" class="box-blob" rx="5"/>
+                <text x="700" y="650" text-anchor="middle" class="title-text">Blob Storage</text>
+                <text x="700" y="670" text-anchor="middle" class="sub-text">STATEMENTS_STORAGE_CONNECTION_STRING</text>
 
-                <rect x="480" y="665" width="200" height="60" class="box" rx="3"/>
-                <text x="580" y="685" text-anchor="middle" class="sub-text">vikas-samples</text>
-                <text x="580" y="703" text-anchor="middle" class="small-text">Input binders (PDFs)</text>
-                <text x="580" y="717" text-anchor="middle" class="small-text">EXTRACT_ALLOWED_BINDERS</text>
+                <rect x="480" y="690" width="200" height="60" class="box" rx="3"/>
+                <text x="580" y="710" text-anchor="middle" class="sub-text">vikas-samples</text>
+                <text x="580" y="728" text-anchor="middle" class="small-text">Input binders (PDFs)</text>
+                <text x="580" y="742" text-anchor="middle" class="small-text">EXTRACT_ALLOWED_BINDERS</text>
 
-                <rect x="700" y="665" width="220" height="60" class="box" rx="3"/>
-                <text x="810" y="685" text-anchor="middle" class="sub-text">vikas-batches</text>
-                <text x="810" y="703" text-anchor="middle" class="small-text">batch_id, summary_id</text>
-                <text x="810" y="717" text-anchor="middle" class="small-text">BATCHES_CONTAINER (default)</text>
+                <rect x="700" y="690" width="220" height="60" class="box" rx="3"/>
+                <text x="810" y="710" text-anchor="middle" class="sub-text">vikas-batches</text>
+                <text x="810" y="728" text-anchor="middle" class="small-text">batch_id, summary_id</text>
+                <text x="810" y="742" text-anchor="middle" class="small-text">BATCHES_CONTAINER (default)</text>
 
-                <rect x="480" y="740" width="200" height="60" class="box" rx="3"/>
-                <text x="580" y="760" text-anchor="middle" class="sub-text">vikas-reports</text>
-                <text x="580" y="778" text-anchor="middle" class="small-text">Published xlsx/HTML</text>
-                <text x="580" y="792" text-anchor="middle" class="small-text">REPORTS_CONTAINER (default)</text>
+                <rect x="480" y="765" width="200" height="60" class="box" rx="3"/>
+                <text x="580" y="785" text-anchor="middle" class="sub-text">vikas-reports</text>
+                <text x="580" y="803" text-anchor="middle" class="small-text">Published xlsx/HTML</text>
+                <text x="580" y="817" text-anchor="middle" class="small-text">REPORTS_CONTAINER (default)</text>
 
-                <text x="700" y="825" text-anchor="middle" class="small-text">Container names are examples from demo deployment</text>
+                <text x="700" y="850" text-anchor="middle" class="small-text">Container names are examples from demo deployment</text>
 
                 <!-- Arrows - Control Flow -->
                 <path d="M 500 80 L 500 120" class="arrow"/>
                 <text x="520" y="105" class="label-text">request</text>
 
-                <path d="M 500 270 L 500 340" class="arrow"/>
-                <text x="520" y="310" class="label-text">HTTPS call</text>
+                <path d="M 500 305 L 500 365" class="arrow"/>
+                <text x="520" y="340" class="label-text">HTTPS call</text>
 
-                <path d="M 230 540 L 180 600" class="arrow"/>
-                <text x="180" y="575" class="label-text">OCR</text>
+                <path d="M 230 565 L 180 625" class="arrow"/>
+                <text x="180" y="600" class="label-text">OCR</text>
 
-                <path d="M 500 540 L 500 600" class="arrow"/>
-                <text x="520" y="575" class="label-text">read/write</text>
+                <path d="M 500 565 L 500 625" class="arrow"/>
+                <text x="520" y="600" class="label-text">read/write</text>
 
-                <path d="M 685 540 L 750 600" class="arrow"/>
-                <text x="740" y="575" class="label-text">publish</text>
+                <path d="M 685 565 L 750 625" class="arrow"/>
+                <text x="740" y="600" class="label-text">publish</text>
 
                 <!-- Arrows - Data Flow -->
-                <path d="M 225 720 L 280 540" class="arrow-data"/>
-                <text x="220" y="630" class="label-text" fill="#4caf50">layout data</text>
+                <path d="M 225 745 L 280 565" class="arrow-data"/>
+                <text x="220" y="655" class="label-text" fill="#4caf50">layout data</text>
 
-                <path d="M 700 600 L 600 540" class="arrow-data"/>
-                <text x="680" y="575" class="label-text" fill="#4caf50">batches</text>
+                <path d="M 700 625 L 600 565" class="arrow-data"/>
+                <text x="680" y="600" class="label-text" fill="#4caf50">batches</text>
 
-                <path d="M 750 600 L 740 540" class="arrow-data"/>
-                <text x="770" y="575" class="label-text" fill="#4caf50">reports</text>
+                <path d="M 750 625 L 740 565" class="arrow-data"/>
+                <text x="770" y="600" class="label-text" fill="#4caf50">reports</text>
 
-                <path d="M 500 340 L 500 270" class="arrow-data"/>
-                <text x="450" y="310" class="label-text" fill="#4caf50">response</text>
+                <path d="M 500 365 L 500 305" class="arrow-data"/>
+                <text x="450" y="340" class="label-text" fill="#4caf50">response</text>
 
                 <path d="M 500 120 L 500 80" class="arrow-data"/>
                 <text x="450" y="105" class="label-text" fill="#4caf50">xlsx/HTML URL</text>
 
                 <!-- Security Warning -->
-                <rect x="50" y="870" width="900" height="20" fill="none"/>
-                <text x="500" y="885" text-anchor="middle" class="warning-text">⚠️ SECRETS NEVER GO IN GIT - Configure keys/connection strings in Azure Portal only</text>
+                <rect x="50" y="895" width="900" height="40" fill="none"/>
+                <text x="500" y="910" text-anchor="middle" class="warning-text">⚠️ SECRETS NEVER GO IN GIT - Configure keys/connection strings in Azure Portal only</text>
+                <text x="500" y="930" text-anchor="middle" class="small-text" fill="#333">Auth: PROJECT CONNECTION with x-functions-key (requires Foundry Project Manager role)</text>
             </svg>
         </div>
 
@@ -744,14 +749,27 @@ az cognitiveservices account keys list \
         <div class="step-header">
             <span class="step-number">6</span>
             <div>
-                <h3 style="margin: 0;">Configure 7 required environment variables</h3>
+                <h3 style="margin: 0;">Configure required and optional environment variables</h3>
             </div>
         </div>
 
-        <div class="callout callout-important">
-            <strong>⚠️ CRITICAL: Never commit these values to git</strong>
-            <p>All credentials must remain in Azure Portal configuration only.</p>
+        <p>The Function App requires <strong>three platform-managed settings</strong> (automatically configured by Azure) and <strong>four operator-provided settings</strong> (you must configure these). Two additional settings are optional overrides.</p>
+
+        <h3>6.1 Platform-Managed Settings (Automatic)</h3>
+        <p>These settings are automatically configured by Azure when you create the Function App and should <strong>not</strong> be manually overwritten:</p>
+        <ul>
+            <li><code>AzureWebJobsStorage</code>: Function App internal storage (set during <code>az functionapp create</code> via <code>--storage-account</code>)</li>
+            <li><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>: Telemetry connection string (set during <code>az functionapp create</code> via <code>--app-insights</code>)</li>
+            <li><code>DEPLOYMENT_STORAGE_CONNECTION_STRING</code>: Deployment-managed storage (may be set by Azure deployment infrastructure)</li>
+        </ul>
+
+        <div class="callout callout-warning">
+            <strong>⚠️ Do not overwrite these values</strong>
+            <p>unless you intentionally want to redirect the Function App to different infrastructure.</p>
         </div>
+
+        <h3>6.2 Operator-Provided Settings (Required)</h3>
+        <p>Configure these <strong>four required settings</strong> that the function code reads:</p>
 
         <pre><code>FUNC_APP_NAME="vikas-servicing-fn"
 RG_NAME="rg-kiwi-demo"
@@ -760,20 +778,28 @@ az functionapp config appsettings set \
   --name "$FUNC_APP_NAME" \
   --resource-group "$RG_NAME" \
   --settings \
-    "AzureWebJobsStorage=&lt;paste-storage-connection-string&gt;" \
     "STATEMENTS_STORAGE_CONNECTION_STRING=&lt;paste-storage-connection-string&gt;" \
     "DOCUMENTINTELLIGENCE_ENDPOINT=&lt;paste-DI-endpoint&gt;" \
     "DOCUMENTINTELLIGENCE_KEY=&lt;paste-DI-key&gt;" \
-    "APPLICATIONINSIGHTS_CONNECTION_STRING=&lt;paste-appinsights-connection-string&gt;" \
-    "EXTRACT_ALLOWED_BINDERS=vikas-samples" \
-    "REPORTS_CONTAINER=vikas-reports" \
-    "BATCHES_CONTAINER=vikas-batches"</code></pre>
+    "EXTRACT_ALLOWED_BINDERS=vikas-samples"</code></pre>
+
+        <h3>6.3 Optional Container Name Overrides</h3>
+        <p>By default, the function code uses <code>vikas-batches</code> and <code>vikas-reports</code> as container names. Only configure these if you created containers with different names:</p>
+
+        <pre><code># Optional: Only if you used different container names
+az functionapp config appsettings set \
+  --name "$FUNC_APP_NAME" \
+  --resource-group "$RG_NAME" \
+  --settings \
+    "BATCHES_CONTAINER=your-custom-batches-name" \
+    "REPORTS_CONTAINER=your-custom-reports-name"</code></pre>
 
         <h3>Application Setting Reference</h3>
         <table>
             <thead>
                 <tr>
                     <th>Setting Name</th>
+                    <th>Type</th>
                     <th>Description</th>
                     <th>Example Format</th>
                 </tr>
@@ -781,51 +807,66 @@ az functionapp config appsettings set \
             <tbody>
                 <tr>
                     <td><code>AzureWebJobsStorage</code></td>
-                    <td>Function App internal storage connection string</td>
+                    <td>Platform-managed</td>
+                    <td>Function App internal storage</td>
+                    <td><code>DefaultEndpointsProtocol=https;AccountName=...</code></td>
+                </tr>
+                <tr>
+                    <td><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code></td>
+                    <td>Platform-managed</td>
+                    <td>Application Insights telemetry</td>
+                    <td><code>InstrumentationKey=...;IngestionEndpoint=...</code></td>
+                </tr>
+                <tr>
+                    <td><code>DEPLOYMENT_STORAGE_CONNECTION_STRING</code></td>
+                    <td>Platform-managed</td>
+                    <td>Deployment infrastructure storage (if present)</td>
                     <td><code>DefaultEndpointsProtocol=https;AccountName=...</code></td>
                 </tr>
                 <tr>
                     <td><code>STATEMENTS_STORAGE_CONNECTION_STRING</code></td>
-                    <td>Statement storage account connection string (typically same as above)</td>
+                    <td><strong>Operator-provided (required)</strong></td>
+                    <td>Statement storage account connection string</td>
                     <td><code>DefaultEndpointsProtocol=https;AccountName=...</code></td>
                 </tr>
                 <tr>
                     <td><code>DOCUMENTINTELLIGENCE_ENDPOINT</code></td>
-                    <td>Document Intelligence resource endpoint URL</td>
+                    <td><strong>Operator-provided (required)</strong></td>
+                    <td>Document Intelligence resource endpoint</td>
                     <td><code>https://kiwi-docs.cognitiveservices.azure.com/</code></td>
                 </tr>
                 <tr>
                     <td><code>DOCUMENTINTELLIGENCE_KEY</code></td>
+                    <td><strong>Operator-provided (required)</strong></td>
                     <td>Document Intelligence API key</td>
                     <td><code>&lt;32-character-hex-key&gt;</code></td>
                 </tr>
                 <tr>
-                    <td><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code></td>
-                    <td>Application Insights connection string for telemetry</td>
-                    <td><code>InstrumentationKey=...;IngestionEndpoint=...</code></td>
-                </tr>
-                <tr>
                     <td><code>EXTRACT_ALLOWED_BINDERS</code></td>
-                    <td>Comma-separated list of allowed container names for statement input</td>
+                    <td><strong>Operator-provided (required)</strong></td>
+                    <td>Comma-separated list of allowed container names</td>
                     <td><code>vikas-samples</code> or <code>vikas-samples,prod-statements</code></td>
                 </tr>
                 <tr>
+                    <td><code>BATCHES_CONTAINER</code></td>
+                    <td>Optional override</td>
+                    <td>Container for batch storage (defaults to <code>vikas-batches</code>)</td>
+                    <td><code>vikas-batches</code></td>
+                </tr>
+                <tr>
                     <td><code>REPORTS_CONTAINER</code></td>
-                    <td>Container for published reports (optional, defaults to <code>vikas-reports</code>)</td>
+                    <td>Optional override</td>
+                    <td>Container for published reports (defaults to <code>vikas-reports</code>)</td>
                     <td><code>vikas-reports</code></td>
                 </tr>
                 <tr>
-                    <td><code>BATCHES_CONTAINER</code></td>
-                    <td>Container for batch storage (optional, defaults to <code>vikas-batches</code>)</td>
-                    <td><code>vikas-batches</code></td>
+                    <td><code>EXTRACT_URL_ALLOWED_HOSTS</code></td>
+                    <td>Optional override</td>
+                    <td>Comma-separated allowed URL hosts for <code>file_urls</code> fallback (defaults to <code>*.blob.core.windows.net</code>)</td>
+                    <td><code>*.blob.core.windows.net</code></td>
                 </tr>
             </tbody>
         </table>
-
-        <div class="callout callout-info">
-            <strong>Optional settings:</strong>
-            <p><code>EXTRACT_URL_ALLOWED_HOSTS</code>: Comma-separated allowed URL hosts for <code>file_urls</code> fallback (defaults to <code>*.blob.core.windows.net</code>)</p>
-        </div>
 
         <h2 id="step7">7. Publish the Function App</h2>
         <div class="step-header">
@@ -931,7 +972,25 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
             </div>
         </div>
 
-        <h3>9.1 Create AI Foundry Project</h3>
+        <h3>9.1 Prerequisites: Assign Required Foundry Roles</h3>
+        <p>Before configuring the Foundry agent, ensure your Azure account has the necessary permissions on the AI Foundry project:</p>
+        <ol>
+            <li>Navigate to your AI Foundry project in Azure Portal</li>
+            <li>Go to <strong>Access Control (IAM)</strong> → <strong>+ Add role assignment</strong></li>
+            <li>Assign the following roles to your user account:
+                <ul>
+                    <li><strong>Azure AI Foundry User</strong>: Allows using the Foundry agent and calling models</li>
+                    <li><strong>Azure AI Foundry Project Manager</strong>: Allows creating and managing connections (required for PROJECT CONNECTION setup in Step 10.3)</li>
+                </ul>
+            </li>
+        </ol>
+
+        <div class="callout callout-info">
+            <strong>Why these roles are required:</strong>
+            <p>Microsoft Foundry OpenAPI authentication requires creating a PROJECT CONNECTION to pass the Function key securely to the OpenAPI tool. Without the Project Manager role, you cannot create or manage connections.</p>
+        </div>
+
+        <h3>9.2 Create AI Foundry Project</h3>
         <ol>
             <li>Navigate to <strong>Azure AI Foundry</strong> at <a href="https://ai.azure.com">https://ai.azure.com</a></li>
             <li>Select your subscription and create a new <strong>AI Hub</strong> (if you don't have one)</li>
@@ -943,33 +1002,47 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
             </li>
         </ol>
 
-        <h3>9.2 Deploy Chat Model</h3>
+        <h3>9.3 Deploy Chat Model with OpenAPI Tool Support</h3>
+        <div class="callout callout-important">
+            <strong>⚠️ CRITICAL</strong>
+            <p>Not all models/regions support OpenAPI tools. You must select a model and region combination that supports <strong>function calling</strong> and <strong>OpenAPI tool execution</strong>.</p>
+        </div>
+
         <ol>
             <li>In your AI Foundry project, go to <strong>Deployments</strong> → <strong>+ Create deployment</strong></li>
-            <li>Select your preferred model (e.g., <code>gpt-4o</code>, <code>gpt-4-turbo</code>, or <code>gpt-3.5-turbo</code>)</li>
+            <li>Select a model that supports OpenAPI tools:
+                <ul>
+                    <li><strong>Recommended:</strong> <code>gpt-4o</code>, <code>gpt-4-turbo</code> (both support OpenAPI tools in most regions)</li>
+                    <li><strong>Check regional availability</strong> at <a href="https://learn.microsoft.com/azure/ai-services/openai/concepts/models">Azure OpenAI model availability</a></li>
+                </ul>
+            </li>
             <li>Configure:
                 <ul>
-                    <li><strong>Deployment name:</strong> <code>gpt-5</code> or your chosen name</li>
+                    <li><strong>Deployment name:</strong> Use a name that matches the model (e.g., <code>gpt-4o</code> for gpt-4o model, <code>gpt-4-turbo</code> for gpt-4-turbo)
+                        <br><span class="callout callout-warning" style="display: inline-block; margin-top: 0.5em; padding: 5px 10px;">⚠️ <strong>Do NOT name a non-gpt-4o deployment <code>gpt-5</code></strong> - keep deployment names consistent with the actual model</span>
+                    </li>
                     <li><strong>Model version:</strong> Latest available</li>
+                    <li><strong>Region:</strong> Choose a region where the model supports OpenAPI tools (e.g., <code>eastus</code>, <code>westeurope</code>, <code>australiaeast</code>)</li>
                     <li><strong>Tokens per minute rate limit:</strong> Set according to your needs</li>
                 </ul>
             </li>
             <li><strong>Deploy</strong> and wait for the deployment to complete</li>
+            <li><strong>Verify OpenAPI tool support:</strong> Test a simple function-calling prompt in the playground to confirm the deployment can invoke tools</li>
         </ol>
 
-        <h3>9.3 Create the Agent</h3>
+        <h3>9.4 Create the Agent</h3>
         <ol>
             <li>In your AI Foundry project, go to <strong>Agents</strong> → <strong>+ Create agent</strong></li>
             <li>Configure:
                 <ul>
                     <li><strong>Name:</strong> <code>vikas-agent-demo</code> (or your preferred name)</li>
-                    <li><strong>Model deployment:</strong> Select the deployment you created above</li>
+                    <li><strong>Model deployment:</strong> Select the deployment you created above (must support OpenAPI tools)</li>
                     <li><strong>Description:</strong> "NZ bank statement servicing assessment agent"</li>
                 </ul>
             </li>
         </ol>
 
-        <h3>9.4 Paste Agent Instructions</h3>
+        <h3>9.5 Paste Agent Instructions</h3>
         <div class="callout callout-important">
             <strong>⚠️ CRITICAL STEP</strong>
             <p>The agent instructions define how the model classifies transactions and calls the functions. This file is the exact prompt the agent must follow.</p>
@@ -1039,7 +1112,9 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
             </li>
         </ol>
 
-        <h3>10.3 Configure Authentication</h3>
+        <h3>10.3 Configure Authentication with PROJECT CONNECTION</h3>
+        <p>Microsoft Foundry OpenAPI authentication requires creating a <strong>PROJECT CONNECTION</strong> whose custom key name/value match the OpenAPI security scheme.</p>
+
         <p>The OpenAPI spec defines a security scheme <code>functionsKey</code>:</p>
 <pre><code>"securitySchemes": {
   "functionsKey": {
@@ -1049,20 +1124,56 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
   }
 }</code></pre>
 
-        <p>In Foundry:</p>
+        <h4>10.3.1 Create a PROJECT CONNECTION</h4>
         <ol>
-            <li>Set <strong>Authentication type</strong> to <strong>API Key</strong></li>
-            <li>Configure:
+            <li>In your AI Foundry project, go to <strong>Settings</strong> → <strong>Connections</strong> (or <strong>Connected resources</strong>)</li>
+            <li>Click <strong>+ New connection</strong> or <strong>+ Add connection</strong></li>
+            <li>Select <strong>Custom</strong> or <strong>API Key</strong> connection type</li>
+            <li>Configure the connection:
                 <ul>
-                    <li><strong>Header name:</strong> <code>x-functions-key</code></li>
-                    <li><strong>API key value:</strong> Paste your Function App default function key from Step 7.2</li>
+                    <li><strong>Connection name:</strong> <code>kiwi-function-auth</code> (or your preferred name)</li>
+                    <li><strong>Authentication type:</strong> Custom API Key</li>
+                    <li><strong>Key name:</strong> <code>x-functions-key</code> (must exactly match the OpenAPI <code>securitySchemes.functionsKey.name</code>)</li>
+                    <li><strong>Key value:</strong> Paste your Function App default function key from Step 7.2</li>
+                </ul>
+            </li>
+            <li><strong>Save</strong> the connection</li>
+        </ol>
+
+        <div class="callout callout-important">
+            <strong>⚠️ Critical:</strong>
+            <p>The key name <code>x-functions-key</code> must match the OpenAPI security scheme's <code>name</code> field exactly. Mismatched names will result in 401 authentication errors.</p>
+        </div>
+
+        <h4>10.3.2 Select the Connection for the OpenAPI Tool</h4>
+        <ol>
+            <li>Return to your agent's <strong>Tools</strong> or <strong>Actions</strong> configuration</li>
+            <li>Find the <code>vikas_servicing</code> OpenAPI tool you created in Step 10.2</li>
+            <li>In the <strong>Authentication</strong> section:
+                <ul>
+                    <li>Set <strong>Authentication type</strong> to <strong>Connection</strong> (or <strong>Use connection</strong>)</li>
+                    <li>Select the connection you created: <code>kiwi-function-auth</code></li>
+                </ul>
+            </li>
+            <li><strong>Save</strong> the tool configuration</li>
+        </ol>
+
+        <h4>10.3.3 Verify the Connection</h4>
+        <ol>
+            <li>Confirm the connection shows as <strong>Connected</strong> or <strong>Active</strong></li>
+            <li>Test authentication by running a simple agent query (see Step 11 for test procedures)</li>
+            <li>If you receive 401 errors, verify:
+                <ul>
+                    <li>The connection key name is exactly <code>x-functions-key</code></li>
+                    <li>The key value matches the Function App key from Step 7.2</li>
+                    <li>The connection is selected in the tool's authentication settings</li>
                 </ul>
             </li>
         </ol>
 
         <div class="callout callout-info">
             <strong>Alternative for production:</strong>
-            <p>Use Managed Identity authentication if your Foundry project and Function App support it.</p>
+            <p>Use Managed Identity authentication if your Foundry project and Function App support it (requires additional Azure RBAC configuration).</p>
         </div>
 
         <h3>10.4 Verify Tool Attachment</h3>
@@ -1089,7 +1200,7 @@ curl -X POST "https://${FUNC_HOST}/api/render_report?code=${FUNC_KEY}" \
         </div>
 
         <h3>11.1 Upload Test Statements</h3>
-        <p>Upload sample statement PDFs to your <code>vikas-samples</code> container (or whichever container you configured in <code>EXTRACT_ALLOWED_BINDERS</code>):</p>
+        <p>Upload <strong>synthetic or test</strong> statement PDFs to your <code>vikas-samples</code> container (or whichever container you configured in <code>EXTRACT_ALLOWED_BINDERS</code>):</p>
 
         <pre><code># Using Azure CLI
 az storage blob upload \
@@ -1098,9 +1209,19 @@ az storage blob upload \
   --name statement.pdf \
   --connection-string "$STORAGE_CONN"</code></pre>
 
-        <div class="callout callout-warning">
-            <strong>Note:</strong>
-            <p>Use synthetic/test statements only. <strong>Never upload files containing real customer names or personal information.</strong></p>
+        <div class="callout callout-important">
+            <strong>⚠️ CRITICAL - Data Policy Requirements:</strong>
+            <ul style="margin-top: 0.5em;">
+                <li><strong>✓ Synthetic data is REQUIRED</strong> for smoke tests, demonstrations, and development</li>
+                <li><strong>✓ Production statements</strong> containing real customer data must ONLY be stored in controlled private storage under organizational data governance policies</li>
+                <li><strong>✗ Real PII is PROHIBITED</strong> from Git, public repositories, and uncontrolled storage accounts</li>
+                <li>The service <strong>CAN process real customer data</strong> in production when deployed with appropriate access controls, encryption, and compliance policies - this prohibition applies only to test/demo environments and source control</li>
+            </ul>
+        </div>
+
+        <div class="callout callout-info">
+            <strong>For this deployment guide:</strong>
+            <p>Use only synthetic test data that mimics the structure of real statements but contains no real customer names, account numbers, or personal information.</p>
         </div>
 
         <h3>11.2 Test Chat - Excel Output</h3>
@@ -1230,11 +1351,13 @@ az monitor app-insights query \
 
         <ol>
             <li>Find the previous deployment ID:
-<pre><code>az webapp deployment list \
+<pre><code>az webapp log deployment list \
   --name vikas-servicing-fn \
-  --resource-group rg-kiwi-demo \
-  --query "[].{id:id, status:status, active:active, receivedTime:receivedTime}" \
-  --output table</code></pre>
+  --resource-group rg-kiwi-demo</code></pre>
+                <p>Or view deployment history in the Azure Portal:</p>
+<pre><code>az webapp deployment list-publishing-profiles \
+  --name vikas-servicing-fn \
+  --resource-group rg-kiwi-demo</code></pre>
             </li>
             <li>Re-deploy the last known-good commit:
 <pre><code>git checkout &lt;previous-commit-sha&gt;
@@ -1276,15 +1399,18 @@ func azure functionapp publish vikas-servicing-fn</code></pre>
                 <li>Storage account created with three containers (<code>samples</code>, <code>batches</code>, <code>reports</code>)</li>
                 <li>Document Intelligence resource created and credentials obtained</li>
                 <li>Function App created with App Service Plan and Application Insights</li>
-                <li>All 7 application settings configured</li>
+                <li>Azure AI Foundry User and Project Manager roles assigned</li>
+                <li>Four required operator-provided application settings configured (<code>STATEMENTS_STORAGE_CONNECTION_STRING</code>, <code>DOCUMENTINTELLIGENCE_ENDPOINT</code>, <code>DOCUMENTINTELLIGENCE_KEY</code>, <code>EXTRACT_ALLOWED_BINDERS</code>)</li>
                 <li>Functions published successfully (<code>func azure functionapp publish</code>)</li>
                 <li>Smoke tests pass (HTTP 400 on empty body, not 404/500)</li>
-                <li>AI Foundry project created with model deployed</li>
+                <li>AI Foundry project created with OpenAPI-tool-capable model deployed</li>
+                <li>Model deployment name matches actual model (e.g., <code>gpt-4o</code>, not generic names like <code>gpt-5</code>)</li>
                 <li>Foundry agent created with instructions pasted from <code>PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code></li>
-                <li>OpenAPI service attached with correct server URL and Function key auth</li>
+                <li>PROJECT CONNECTION created with key name <code>x-functions-key</code> and Function App key value</li>
+                <li>OpenAPI service attached with correct server URL and connection selected</li>
                 <li>End-to-end test produces xlsx download URL</li>
                 <li>End-to-end test produces html download URL (when <code>format=html</code> or <code>format=both</code>)</li>
-                <li>Test statements uploaded to samples container</li>
+                <li>Synthetic test statements uploaded to samples container (no real PII)</li>
                 <li>No secrets committed to repository</li>
             </ul>
         </div>
