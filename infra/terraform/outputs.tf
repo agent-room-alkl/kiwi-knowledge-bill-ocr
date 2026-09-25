@@ -126,9 +126,9 @@ output "deployment_summary" {
     document_intelligence = local.create_backend_resources ? {
       name     = azurerm_cognitive_account.doc_intelligence[0].name
       endpoint = azurerm_cognitive_account.doc_intelligence[0].endpoint
-    } : (var.existing_document_intelligence_name != "" ? {
-      name     = var.existing_document_intelligence_name
-      endpoint = data.azurerm_cognitive_account.existing_doc_intelligence[0].endpoint
+      } : (var.existing_document_intelligence_name != "" ? {
+        name     = var.existing_document_intelligence_name
+        endpoint = data.azurerm_cognitive_account.existing_doc_intelligence[0].endpoint
     } : null)
     ai_foundry = var.create_ai_foundry_resources ? {
       project_name     = azapi_resource.ai_project[0].name

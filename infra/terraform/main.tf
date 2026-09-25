@@ -187,10 +187,10 @@ resource "azurerm_storage_account" "main" {
 
 locals {
   # Reference existing or created storage account
-  storage_account_id                = var.use_existing_backend ? data.azurerm_storage_account.existing[0].id : azurerm_storage_account.main[0].id
-  storage_account_name_final        = var.use_existing_backend ? data.azurerm_storage_account.existing[0].name : azurerm_storage_account.main[0].name
-  storage_account_primary_conn_str  = var.use_existing_backend ? data.azurerm_storage_account.existing[0].primary_connection_string : azurerm_storage_account.main[0].primary_connection_string
-  storage_account_primary_key       = var.use_existing_backend ? data.azurerm_storage_account.existing[0].primary_access_key : azurerm_storage_account.main[0].primary_access_key
+  storage_account_id               = var.use_existing_backend ? data.azurerm_storage_account.existing[0].id : azurerm_storage_account.main[0].id
+  storage_account_name_final       = var.use_existing_backend ? data.azurerm_storage_account.existing[0].name : azurerm_storage_account.main[0].name
+  storage_account_primary_conn_str = var.use_existing_backend ? data.azurerm_storage_account.existing[0].primary_connection_string : azurerm_storage_account.main[0].primary_connection_string
+  storage_account_primary_key      = var.use_existing_backend ? data.azurerm_storage_account.existing[0].primary_access_key : azurerm_storage_account.main[0].primary_access_key
 }
 
 resource "azurerm_storage_container" "main" {
@@ -238,8 +238,8 @@ resource "azurerm_application_insights" "main" {
 
 locals {
   # Reference existing or created App Insights
-  app_insights_id                = var.use_existing_backend ? data.azurerm_application_insights.existing[0].id : (local.enable_app_insights ? azurerm_application_insights.main[0].id : null)
-  app_insights_connection_string = var.use_existing_backend ? data.azurerm_application_insights.existing[0].connection_string : (local.enable_app_insights ? azurerm_application_insights.main[0].connection_string : null)
+  app_insights_id                  = var.use_existing_backend ? data.azurerm_application_insights.existing[0].id : (local.enable_app_insights ? azurerm_application_insights.main[0].id : null)
+  app_insights_connection_string   = var.use_existing_backend ? data.azurerm_application_insights.existing[0].connection_string : (local.enable_app_insights ? azurerm_application_insights.main[0].connection_string : null)
   app_insights_instrumentation_key = var.use_existing_backend ? data.azurerm_application_insights.existing[0].instrumentation_key : (local.enable_app_insights ? azurerm_application_insights.main[0].instrumentation_key : null)
 }
 
@@ -319,8 +319,10 @@ resource "azurerm_linux_function_app" "main" {
 
   lifecycle {
     ignore_changes = [
-      # After create, Azure/portal and code deploys mutate these; keep TF from thrashing live app
-      app_settings,
+      # Platform/deploy mutates these keys after create; do not ignore the whole app_settings map
+      app_settings["WEBSITE_RUN_FROM_PACKAGE"],
+      app_settings["AzureWebJobsStorage"],
+      app_settings["APPLICATIONINSIGHTS_CONNECTION_STRING"],
       site_config[0].application_insights_connection_string,
       site_config[0].application_insights_key,
     ]
@@ -329,9 +331,9 @@ resource "azurerm_linux_function_app" "main" {
 
 locals {
   # Reference existing or created Function App
-  function_app_name_final      = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].name : azurerm_linux_function_app.main[0].name
+  function_app_name_final       = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].name : azurerm_linux_function_app.main[0].name
   function_app_default_hostname = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].default_hostname : azurerm_linux_function_app.main[0].default_hostname
-  function_app_principal_id    = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].identity[0].principal_id : azurerm_linux_function_app.main[0].identity[0].principal_id
+  function_app_principal_id     = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].identity[0].principal_id : azurerm_linux_function_app.main[0].identity[0].principal_id
 }
 
 # Grant Function App managed identity access to Document Intelligence
