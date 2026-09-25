@@ -181,7 +181,87 @@ Set `use_managed_identity = true` in `terraform.tfvars` to:
 
 ## AI Foundry Resources (Preview)
 
-Azure AI Foundry provides a managed environment for building AI agents with tool calling. This Terraform configuration can create the infrastructure, but agent and tool configuration must be completed manually in the portal.
+Azure AI Foundry provides a managed environment for building AI agents with tool calling. This Terraform configuration supports TWO deployment shapes:
+
+1. **CLASSIC Hub/Project shape** (MachineLearningServices workspaces) - the original GA path
+2. **NEW AIServices shape** (CognitiveServices accounts) - the nextgen portal path (ai.azure.com/nextgen)
+
+Choose ONE path. They are mutually exclusive.
+
+### NEW Microsoft Foundry Shape: AIServices + Project
+
+The NEW shape creates resources visible in the **nextgen portal** (ai.azure.com/nextgen):
+
+- **AIServices account** (`Microsoft.CognitiveServices/accounts` kind=AIServices) with `allowProjectManagement=true`
+- **Project** (`Microsoft.CognitiveServices/accounts/projects`) as a child resource
+- **Model deployments** (e.g., gpt-4o) under the AIServices account
+
+**API Version:** 2025-06-01 for all resources in this path.
+
+#### Enabling the NEW AIServices Path
+
+Set in `terraform.tfvars`:
+
+```hcl
+create_foundry_aiservices = true
+
+# Optional: Configure SKU and model version
+foundry_aiservices_sku            = "Standard"      # or "GlobalStandard"
+foundry_aiservices_model_version  = "2024-11-20"   # Standard SKU in australiaeast
+foundry_aiservices_model_capacity = 10              # TPM in thousands
+```
+
+**Important constraints:**
+- Region: `australiaeast` (default) supports gpt-4o version 2024-11-20 with Standard SKU
+- For gpt-4o version 2024-05-13, use `GlobalStandard` SKU
+- The NEW path does NOT require Application Insights (unlike the classic Hub path)
+- Mutually exclusive with `create_ai_foundry_resources` (classic path)
+
+#### What Gets Created
+
+When `create_foundry_aiservices = true`, Terraform creates:
+
+1. **AIServices Account** - Parent resource with system-assigned managed identity
+   - Name: `{project_name}-aiservices-{suffix}`
+   - Custom subdomain for endpoint access
+   - `allowProjectManagement = true` enables project creation
+
+2. **Project** - Child resource linked to the AIServices account
+   - Name: `{project_name}-proj-{suffix}`
+   - System-assigned managed identity
+   - Visible in ai.azure.com/nextgen portal
+
+3. **GPT-4o Deployment** - Model deployment under the AIServices account
+   - Name: `gpt-4o`
+   - Configurable SKU and version
+   - Capacity in TPM (thousands of tokens per minute)
+
+#### Outputs
+
+The new path provides these outputs (use `terraform output`):
+
+- `aiservices_account_id` - Full resource ID
+- `aiservices_account_name` - Account name
+- `aiservices_account_endpoint` - Endpoint URL (not a secret)
+- `aiservices_project_id` - Project resource ID
+- `aiservices_project_name` - Project name
+- `aiservices_gpt4o_deployment_name` - Deployment name
+- `aiservices_portal_url` - Direct link to the project in nextgen portal
+
+**Security:** No keys or connection strings are exposed in outputs. Access via Azure RBAC and managed identities.
+
+#### Migration Notes
+
+The NEW AIServices shape is a different resource type than the classic Hub/Project:
+
+- **Classic:** `Microsoft.MachineLearningServices/workspaces` (kind Hub/Project)
+- **NEW:** `Microsoft.CognitiveServices/accounts` (kind AIServices) + child projects
+
+Migrating existing classic resources to the new shape requires recreating them. Plan accordingly.
+
+### CLASSIC AI Foundry Hub/Project Shape
+
+The classic shape creates MachineLearningServices workspace resources (the original GA path).
 
 ### What Terraform Creates
 

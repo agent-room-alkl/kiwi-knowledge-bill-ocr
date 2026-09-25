@@ -203,7 +203,7 @@ variable "enable_application_insights" {
 # ===========================
 
 variable "create_ai_foundry_resources" {
-  description = "Create AI Foundry Hub, Project, and Azure OpenAI resources (preview feature)"
+  description = "Create AI Foundry Hub, Project, and Azure OpenAI resources (preview feature - CLASSIC Hub/Project shape)"
   type        = bool
   default     = false
 }
@@ -228,6 +228,39 @@ variable "foundry_deployment_name" {
 
 variable "foundry_model_capacity" {
   description = "Model deployment capacity (TPM in thousands)"
+  type        = number
+  default     = 10
+}
+
+# ===========================
+# AI Foundry - NEW Microsoft Foundry Shape (AIServices + Project)
+# ===========================
+
+variable "create_foundry_aiservices" {
+  description = "Create NEW Microsoft Foundry shape: AIServices account with allowProjectManagement=true + child project resource (appears in ai.azure.com/nextgen portal). Mutually exclusive with classic Hub/Project path."
+  type        = bool
+  default     = false
+}
+
+variable "foundry_aiservices_sku" {
+  description = "SKU for AIServices account deployments. Standard supports model version 2024-11-20 in australiaeast. Use GlobalStandard for model version 2024-05-13."
+  type        = string
+  default     = "Standard"
+
+  validation {
+    condition     = contains(["Standard", "GlobalStandard"], var.foundry_aiservices_sku)
+    error_message = "SKU must be Standard or GlobalStandard"
+  }
+}
+
+variable "foundry_aiservices_model_version" {
+  description = "GPT-4o model version for AIServices deployment. Use 2024-11-20 with Standard SKU or 2024-05-13 with GlobalStandard SKU."
+  type        = string
+  default     = "2024-11-20"
+}
+
+variable "foundry_aiservices_model_capacity" {
+  description = "Model deployment capacity for AIServices (TPM in thousands)"
   type        = number
   default     = 10
 }

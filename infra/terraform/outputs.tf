@@ -177,3 +177,42 @@ output "agent_instructions_path" {
   description = "Path to agent instructions file for Foundry"
   value       = "foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt"
 }
+
+# ===========================
+# NEW Microsoft Foundry Shape Outputs (AIServices + Project)
+# ===========================
+
+output "aiservices_account_id" {
+  description = "AIServices account resource ID (NEW Foundry shape, if created)"
+  value       = var.create_foundry_aiservices ? azapi_resource.aiservices_account[0].id : null
+}
+
+output "aiservices_account_name" {
+  description = "AIServices account name (NEW Foundry shape, if created)"
+  value       = var.create_foundry_aiservices ? azapi_resource.aiservices_account[0].name : null
+}
+
+output "aiservices_account_endpoint" {
+  description = "AIServices account endpoint URL (NEW Foundry shape, if created)"
+  value       = var.create_foundry_aiservices ? azapi_resource.aiservices_account[0].output.properties.endpoint : null
+}
+
+output "aiservices_project_id" {
+  description = "AIServices project resource ID (NEW Foundry shape, if created)"
+  value       = var.create_foundry_aiservices ? azapi_resource.aiservices_project[0].id : null
+}
+
+output "aiservices_project_name" {
+  description = "AIServices project name (NEW Foundry shape, if created)"
+  value       = var.create_foundry_aiservices ? azapi_resource.aiservices_project[0].name : null
+}
+
+output "aiservices_gpt4o_deployment_name" {
+  description = "GPT-4o deployment name under AIServices account (NEW Foundry shape, if created)"
+  value       = var.create_foundry_aiservices ? azapi_resource.aiservices_gpt4o_deployment[0].name : null
+}
+
+output "aiservices_portal_url" {
+  description = "Azure AI Foundry nextgen portal URL for the project (NEW Foundry shape, if created)"
+  value       = var.create_foundry_aiservices ? "https://ai.azure.com/nextgen/project/${azapi_resource.aiservices_project[0].id}" : null
+}

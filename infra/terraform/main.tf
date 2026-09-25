@@ -61,6 +61,9 @@ locals {
 
   # Validate that use_existing_resource_group is also true when use_existing_backend is true
   validate_rg_with_backend = var.use_existing_backend && !var.use_existing_resource_group ? tobool("ERROR: When use_existing_backend=true, use_existing_resource_group must also be true and resource_group_name must be set") : true
+
+  # Validate that classic Hub/Project and NEW AIServices paths are not both enabled
+  validate_foundry_paths = var.create_ai_foundry_resources && var.create_foundry_aiservices ? tobool("ERROR: create_ai_foundry_resources (classic Hub/Project) and create_foundry_aiservices (NEW AIServices shape) are mutually exclusive. Enable only one.") : true
 }
 
 # ===========================
@@ -104,8 +107,8 @@ locals {
   )
 
   # Application Insights is optional for the core OCR->classify->xlsx/HTML
-  # pipeline. The AI Foundry Hub requires an Application Insights resource, so
-  # enabling Foundry forces it on regardless of the opt-in flag.
+  # pipeline. The classic AI Foundry Hub requires an Application Insights resource.
+  # The NEW AIServices shape does NOT require Application Insights.
   enable_app_insights = var.enable_application_insights || var.create_ai_foundry_resources
 
   # Determine whether to create backend resources
@@ -479,5 +482,108 @@ resource "azurerm_cognitive_deployment" "model" {
   lifecycle {
     # Azure assigns Microsoft.DefaultV2 after create
     ignore_changes = [rai_policy_name]
+  }
+}
+
+# ===========================
+# NEW Microsoft Foundry Shape: AIServices + Project (API 2025-06-01)
+# ===========================
+
+# This section implements the NEW Microsoft Foundry architecture visible in ai.azure.com/nextgen:
+# - Parent: Microsoft.CognitiveServices/accounts kind=AIServices with allowProjectManagement=true
+# - Child: Microsoft.CognitiveServices/accounts/projects (nested under AIServices account)
+# - Deployments: Microsoft.CognitiveServices/accounts/deployments (under AIServices account)
+#
+# This shape is DIFFERENT from the classic Hub/Project path above (MachineLearningServices workspaces).
+# Use create_foundry_aiservices=true to enable this path (default: false, no resources created).
+#
+# IMPORTANT: `kind` must be at the TOP LEVEL of the azapi body, NOT inside body.properties.
+# Placing `kind` inside properties causes azapi schema validation failures.
+#
+# Region: var.location (default australiaeast)
+# Model: gpt-4o with version 2024-11-20 (Standard SKU) or 2024-05-13 (GlobalStandard SKU)
+# API Version: 2025-06-01 for all resources in this section
+#
+# Gating: When create_foundry_aiservices=false, terraform plan produces NO changes to existing state.
+# The classic Hub/Project path can be independently disabled when this path is enabled.
+
+# AIServices account with allowProjectManagement=true (parent resource)
+resource "azapi_resource" "aiservices_account" {
+  count     = var.create_foundry_aiservices ? 1 : 0
+  type      = "Microsoft.CognitiveServices/accounts@2025-06-01"
+  name      = "${var.project_name}-aiservices-${local.suffix}"
+  location  = var.location
+  parent_id = local.resource_group_id
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  body = {
+    kind = "AIServices"
+    properties = {
+      customSubDomainName    = "${var.project_name}-aiservices-${local.suffix}"
+      allowProjectManagement = true
+      publicNetworkAccess    = "Enabled"
+      networkAcls = {
+        defaultAction = "Allow"
+      }
+    }
+    sku = {
+      name = "S0"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# Project resource (child of AIServices account)
+resource "azapi_resource" "aiservices_project" {
+  count     = var.create_foundry_aiservices ? 1 : 0
+  type      = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
+  name      = "${var.project_name}-proj-${local.suffix}"
+  parent_id = azapi_resource.aiservices_account[0].id
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  body = {
+    properties = {
+      friendlyName = "${var.project_name} Foundry Project"
+    }
+  }
+
+  tags = local.common_tags
+
+  depends_on = [azapi_resource.aiservices_account]
+}
+
+# GPT-4o deployment under the AIServices account
+resource "azapi_resource" "aiservices_gpt4o_deployment" {
+  count     = var.create_foundry_aiservices ? 1 : 0
+  type      = "Microsoft.CognitiveServices/accounts/deployments@2025-06-01"
+  name      = "gpt-4o"
+  parent_id = azapi_resource.aiservices_account[0].id
+
+  body = {
+    properties = {
+      model = {
+        format  = "OpenAI"
+        name    = "gpt-4o"
+        version = var.foundry_aiservices_model_version
+      }
+    }
+    sku = {
+      name     = var.foundry_aiservices_sku
+      capacity = var.foundry_aiservices_model_capacity
+    }
+  }
+
+  depends_on = [azapi_resource.aiservices_account]
+
+  lifecycle {
+    # Azure assigns rai_policy_name after create
+    ignore_changes = [body.properties.raiPolicyName]
   }
 }
