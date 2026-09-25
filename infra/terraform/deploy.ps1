@@ -21,6 +21,7 @@
     - apply: Apply infrastructure changes (USE WITH CAUTION)
     - deploy-functions: Deploy Function App code
     - generate-openapi: Generate OpenAPI spec with Function URL
+    - configure-foundry: Run post-deployment Foundry configuration helper
     - outputs: Show Terraform outputs
     - destroy: Destroy all resources (USE WITH EXTREME CAUTION)
 
@@ -37,6 +38,7 @@
     .\deploy.ps1 -Action apply
     .\deploy.ps1 -Action deploy-functions
     .\deploy.ps1 -Action generate-openapi
+    .\deploy.ps1 -Action configure-foundry
     .\deploy.ps1 -Action outputs
 
 .NOTES
@@ -48,7 +50,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('init', 'validate', 'fmt', 'plan', 'apply', 'deploy-functions', 'generate-openapi', 'outputs', 'destroy')]
+    [ValidateSet('init', 'validate', 'fmt', 'plan', 'apply', 'deploy-functions', 'generate-openapi', 'configure-foundry', 'outputs', 'destroy')]
     [string]$Action,
 
     [Parameter(Mandatory=$false)]
@@ -226,6 +228,7 @@ function Invoke-TerraformApply {
     Write-Success "Infrastructure deployed successfully"
     Write-Info "Run -Action outputs to see deployment details"
     Write-Info "Run -Action deploy-functions to deploy Function App code"
+    Write-Info "Run -Action configure-foundry to set up AI Foundry (if create_ai_foundry_resources=true)"
 }
 
 # Deploy Function App code
@@ -413,6 +416,14 @@ switch ($Action) {
     }
     'generate-openapi' {
         Invoke-GenerateOpenAPI
+    }
+    'configure-foundry' {
+        Write-Info "Running Foundry configuration helper..."
+        & "$PSScriptRoot\configure-foundry.ps1"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error-Custom "Foundry configuration helper failed"
+            exit $LASTEXITCODE
+        }
     }
     'outputs' {
         Show-Outputs

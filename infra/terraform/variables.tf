@@ -153,30 +153,19 @@ variable "use_managed_identity" {
 # ===========================
 
 variable "create_ai_foundry_resources" {
-  description = "Create AI Foundry Hub and Project resources (preview feature)"
+  description = "Create AI Foundry Hub, Project, and Azure OpenAI resources (preview feature)"
   type        = bool
   default     = false
 }
 
-variable "foundry_ai_services_sku" {
-  description = "AI Services SKU for model deployments (S0 = standard, S = multi-service)"
-  type        = string
-  default     = "S0"
-
-  validation {
-    condition     = contains(["S0", "S"], var.foundry_ai_services_sku)
-    error_message = "SKU must be S0 (standard) or S (multi-service)"
-  }
-}
-
 variable "foundry_model_name" {
-  description = "AI Foundry model name to deploy (e.g., gpt-4, gpt-35-turbo). Empty to skip model deployment"
+  description = "AI Foundry model name to deploy (e.g., gpt-4, gpt-35-turbo, gpt-4o). Empty to skip model deployment"
   type        = string
   default     = ""
 }
 
 variable "foundry_model_version" {
-  description = "Model version (e.g., 0613, turbo-2024-04-09)"
+  description = "Model version (e.g., 0613, turbo-2024-04-09, 2024-05-13 for gpt-4o)"
   type        = string
   default     = "0613"
 }
