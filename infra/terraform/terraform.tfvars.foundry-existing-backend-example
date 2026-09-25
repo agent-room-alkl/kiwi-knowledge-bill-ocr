@@ -75,6 +75,9 @@ existing_app_service_plan_name      = "kiwidemo-asp-b923ue"
 
 create_ai_foundry_resources = true
 
+# Control classic Hub/Project independently (null = follow create_ai_foundry_resources)
+# create_classic_foundry_hub = false  # Remove classic Hub/Project while keeping Key Vault, App Insights, OpenAI
+
 # Model configuration (GPT-4o recommended)
 foundry_model_name       = "gpt-4o"
 foundry_model_version    = "2024-05-13"

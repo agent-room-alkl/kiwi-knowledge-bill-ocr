@@ -59,6 +59,9 @@ use_managed_identity = false  # Set to true to use managed identity instead of A
 
 create_ai_foundry_resources = false  # Set to true to create Hub/Project/OpenAI resources
 
+# Control classic Hub/Project independently (null = follow create_ai_foundry_resources)
+# create_classic_foundry_hub = false  # Remove classic Hub/Project while keeping Key Vault, App Insights, OpenAI
+
 # Model deployment (only if create_ai_foundry_resources = true)
 # Common models: gpt-4, gpt-35-turbo, gpt-4o, gpt-4-turbo
 foundry_model_name       = ""       # e.g., "gpt-4o" - leave empty to skip model deployment

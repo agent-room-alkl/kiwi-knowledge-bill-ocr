@@ -113,6 +113,9 @@ locals {
   # The NEW AIServices shape does NOT require Application Insights.
   enable_app_insights = var.enable_application_insights || var.create_ai_foundry_resources
 
+  # Classic Hub/Project can be toggled independently (null = follow create_ai_foundry_resources)
+  classic_hub_enabled = coalesce(var.create_classic_foundry_hub, var.create_ai_foundry_resources)
+
   # Determine whether to create backend resources
   create_backend_resources = !var.use_existing_backend
 }
@@ -394,7 +397,7 @@ resource "azurerm_key_vault" "foundry" {
 }
 
 resource "azapi_resource" "ai_hub" {
-  count     = var.create_ai_foundry_resources ? 1 : 0
+  count     = local.classic_hub_enabled ? 1 : 0
   type      = "Microsoft.MachineLearningServices/workspaces@2024-10-01-preview"
   name      = "${var.project_name}-aihub-${local.suffix}"
   location  = var.location
@@ -421,7 +424,7 @@ resource "azapi_resource" "ai_hub" {
 }
 
 resource "azapi_resource" "ai_project" {
-  count     = var.create_ai_foundry_resources ? 1 : 0
+  count     = local.classic_hub_enabled ? 1 : 0
   type      = "Microsoft.MachineLearningServices/workspaces@2024-10-01-preview"
   name      = "${var.project_name}-aiproject-${local.suffix}"
   location  = var.location

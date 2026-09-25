@@ -208,6 +208,13 @@ variable "create_ai_foundry_resources" {
   default     = false
 }
 
+variable "create_classic_foundry_hub" {
+  description = "Create ONLY the classic AI Foundry Hub + Project (MachineLearningServices workspaces). null (default) = follow create_ai_foundry_resources. Set false to remove the classic Hub/Project while keeping Key Vault, App Insights and the Azure OpenAI account/deployment."
+  type        = bool
+  nullable    = true
+  default     = null
+}
+
 variable "foundry_model_name" {
   description = "AI Foundry model name to deploy (e.g., gpt-4, gpt-35-turbo, gpt-4o). Empty to skip model deployment"
   type        = string

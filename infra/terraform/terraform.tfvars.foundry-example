@@ -51,6 +51,9 @@ use_managed_identity = false  # Set true for production (no API keys)
 
 create_ai_foundry_resources = true  # This enables the full Foundry stack
 
+# Control classic Hub/Project independently (null = follow create_ai_foundry_resources)
+# create_classic_foundry_hub = false  # Remove classic Hub/Project while keeping Key Vault, App Insights, OpenAI
+
 # Model deployment configuration
 # IMPORTANT: Check model availability in your region first:
 # https://learn.microsoft.com/azure/ai-services/openai/concepts/models

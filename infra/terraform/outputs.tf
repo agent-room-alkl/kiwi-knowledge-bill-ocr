@@ -68,17 +68,17 @@ output "application_insights_connection_string" {
 
 output "ai_foundry_hub_id" {
   description = "AI Foundry Hub resource ID (if created)"
-  value       = var.create_ai_foundry_resources ? azapi_resource.ai_hub[0].id : null
+  value       = local.classic_hub_enabled ? azapi_resource.ai_hub[0].id : null
 }
 
 output "ai_foundry_project_id" {
   description = "AI Foundry Project resource ID (if created)"
-  value       = var.create_ai_foundry_resources ? azapi_resource.ai_project[0].id : null
+  value       = local.classic_hub_enabled ? azapi_resource.ai_project[0].id : null
 }
 
 output "ai_foundry_project_name" {
   description = "AI Foundry Project name (if created)"
-  value       = var.create_ai_foundry_resources ? azapi_resource.ai_project[0].name : null
+  value       = local.classic_hub_enabled ? azapi_resource.ai_project[0].name : null
 }
 
 output "ai_foundry_openai_endpoint" {
@@ -99,7 +99,7 @@ output "ai_foundry_model_deployment_name" {
 
 output "ai_foundry_portal_url" {
   description = "Azure AI Foundry portal URL (if project created)"
-  value       = var.create_ai_foundry_resources ? "https://ai.azure.com/build/overview?wsid=/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${local.resource_group_name_final}/providers/Microsoft.MachineLearningServices/workspaces/${azapi_resource.ai_project[0].name}" : null
+  value       = local.classic_hub_enabled ? "https://ai.azure.com/build/overview?wsid=/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${local.resource_group_name_final}/providers/Microsoft.MachineLearningServices/workspaces/${try(azapi_resource.ai_project[0].name, "n/a (classic project disabled)")}" : null
 }
 
 output "ai_foundry_key_vault_name" {
@@ -131,7 +131,7 @@ output "deployment_summary" {
         endpoint = data.azurerm_cognitive_account.existing_doc_intelligence[0].endpoint
     } : null)
     ai_foundry = var.create_ai_foundry_resources ? {
-      project_name     = azapi_resource.ai_project[0].name
+      project_name     = local.classic_hub_enabled ? azapi_resource.ai_project[0].name : null
       portal_url       = "https://ai.azure.com"
       openai_endpoint  = var.foundry_model_name != "" ? azurerm_cognitive_account.openai[0].endpoint : null
       model_deployment = var.foundry_model_name != "" ? azurerm_cognitive_deployment.model[0].name : null
@@ -151,7 +151,7 @@ output "next_steps" {
     NEXT STEPS:
     
     ${!var.use_existing_backend ? "1. Deploy Function App code:\n       cd ../function_app\n       func azure functionapp publish ${local.function_app_name_final}\n    \n    2. Get Function App key (SECURE - DO NOT COMMIT):\n       Option A: Azure Functions Core Tools\n         func azure functionapp list-functions ${local.function_app_name_final} --show-keys\n       Option B: Azure CLI\n         az functionapp keys list --name ${local.function_app_name_final} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv\n       Option C: Store in Key Vault (recommended for production)\n         az keyvault secret set --vault-name <vault-name> --name function-key --value <key-from-above>\n       \n    3. Generate OpenAPI spec with correct Function URL:\n       Option A: PowerShell script (Windows)\n         cd infra/terraform\n         .\\deploy.ps1 -Action generate-openapi\n         # Creates foundry/openapi-servicing-<suffix>.json with correct server URL\n         # DO NOT COMMIT THIS FILE\n       Option B: Manual (cross-platform)\n         Run: pwsh infra/terraform/configure-foundry.ps1\n         Or edit foundry/openapi-servicing.json manually:\n           Set servers[0].url = \"https://${local.function_app_default_hostname}/api\"\n    " : "NOTE: Using EXISTING backend resources (use_existing_backend=true)\n    - Function App: ${local.function_app_name_final}\n    - Storage Account: ${local.storage_account_name_final}\n    - App Insights: ${var.existing_app_insights_name}\n    \n    1. Get Function App key (if not already retrieved):\n       az functionapp keys list --name ${local.function_app_name_final} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv\n    \n    2. OpenAPI spec should already point to: https://${local.function_app_default_hostname}/api\n    "}
-    ${var.create_ai_foundry_resources ? "AI FOUNDRY CONFIGURATION (MANUAL STEPS REQUIRED):\n       \n       Terraform has created:\n       - AI Foundry Hub: ${azapi_resource.ai_hub[0].name}\n       - AI Foundry Project: ${azapi_resource.ai_project[0].name}\n       - Key Vault: ${azurerm_key_vault.foundry[0].name}\n       ${var.foundry_model_name != "" ? "- Azure OpenAI: ${azurerm_cognitive_account.openai[0].name}\n       - Model Deployment: ${azurerm_cognitive_deployment.model[0].name} (${var.foundry_model_name})\n       \n       MANUAL PORTAL STEPS:\n       a) Go to Azure AI Portal: https://ai.azure.com\n       b) Open project: ${azapi_resource.ai_project[0].name}\n       c) In project, go to 'Connected resources' and add the OpenAI connection:\n          - Resource: ${azurerm_cognitive_account.openai[0].name}\n          - API key from: terraform output -raw ai_foundry_openai_key\n       d) Create a Foundry Agent in the project\n       e) Attach OpenAPI tool to the agent:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - Create PROJECT CONNECTION with Function key as 'x-functions-key'\n          - Get key: az functionapp keys list --name ${local.function_app_name_final} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv\n       f) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n       \n       See: foundry/HOW_TO_HANG_TOOLS.md for detailed steps\n" : "- OpenAI endpoint: ${azurerm_cognitive_account.openai[0].endpoint}\n       - Model: ${var.foundry_model_name}\n       \n       MANUAL PORTAL STEPS:\n       a) Go to: https://ai.azure.com\n       b) Open project: ${azapi_resource.ai_project[0].name}\n       c) Create a Foundry Agent\n       d) Attach OpenAPI tool:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - CREATE PROJECT CONNECTION with Function key as 'x-functions-key'\n       e) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n"}" : "Configure AI Foundry (if not created via Terraform):\n       - Go to https://ai.azure.com\n       - Create a new project (or use existing)\n       - Create a Foundry agent\n       - Add OpenAPI tool: foundry/openapi-servicing.json\n       - Set up PROJECT CONNECTION with Function key (x-functions-key)\n       - Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt"}
+    ${var.create_ai_foundry_resources ? "AI FOUNDRY CONFIGURATION (MANUAL STEPS REQUIRED):\n       \n       Terraform has created:\n       - AI Foundry Hub: ${try(azapi_resource.ai_hub[0].name, "n/a (classic hub disabled)")}\n       - AI Foundry Project: ${try(azapi_resource.ai_project[0].name, "n/a (classic project disabled)")}\n       - Key Vault: ${azurerm_key_vault.foundry[0].name}\n       ${var.foundry_model_name != "" ? "- Azure OpenAI: ${azurerm_cognitive_account.openai[0].name}\n       - Model Deployment: ${azurerm_cognitive_deployment.model[0].name} (${var.foundry_model_name})\n       \n       MANUAL PORTAL STEPS:\n       a) Go to Azure AI Portal: https://ai.azure.com\n       b) Open project: ${try(azapi_resource.ai_project[0].name, "n/a (classic project disabled)")}\n       c) In project, go to 'Connected resources' and add the OpenAI connection:\n          - Resource: ${azurerm_cognitive_account.openai[0].name}\n          - API key from: terraform output -raw ai_foundry_openai_key\n       d) Create a Foundry Agent in the project\n       e) Attach OpenAPI tool to the agent:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - Create PROJECT CONNECTION with Function key as 'x-functions-key'\n          - Get key: az functionapp keys list --name ${local.function_app_name_final} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv\n       f) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n       \n       See: foundry/HOW_TO_HANG_TOOLS.md for detailed steps\n" : "- OpenAI endpoint: ${azurerm_cognitive_account.openai[0].endpoint}\n       - Model: ${var.foundry_model_name}\n       \n       MANUAL PORTAL STEPS:\n       a) Go to: https://ai.azure.com\n       b) Open project: ${try(azapi_resource.ai_project[0].name, "n/a (classic project disabled)")}\n       c) Create a Foundry Agent\n       d) Attach OpenAPI tool:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - CREATE PROJECT CONNECTION with Function key as 'x-functions-key'\n       e) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n"}" : "Configure AI Foundry (if not created via Terraform):\n       - Go to https://ai.azure.com\n       - Create a new project (or use existing)\n       - Create a Foundry agent\n       - Add OpenAPI tool: foundry/openapi-servicing.json\n       - Set up PROJECT CONNECTION with Function key (x-functions-key)\n       - Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt"}
     
     
     Storage Containers: ${join(", ", local.containers)}

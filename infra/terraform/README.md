@@ -215,7 +215,7 @@ foundry_aiservices_model_capacity = 10              # TPM in thousands
 - Region: `australiaeast` (default) supports gpt-4o version 2024-11-20 with Standard SKU
 - For gpt-4o version 2024-05-13, use `GlobalStandard` SKU
 - The NEW path does NOT require Application Insights (unlike the classic Hub path)
-- Mutually exclusive with `create_ai_foundry_resources` (classic path)
+- Can coexist with `create_ai_foundry_resources` (classic path) - use `create_classic_foundry_hub` to control independently
 
 #### What Gets Created
 
@@ -262,6 +262,29 @@ Migrating existing classic resources to the new shape requires recreating them. 
 ### CLASSIC AI Foundry Hub/Project Shape
 
 The classic shape creates MachineLearningServices workspace resources (the original GA path).
+
+#### Controlling Classic Hub/Project Creation
+
+When `create_ai_foundry_resources = true`, the classic path is enabled. By default, this creates:
+- Key Vault
+- Application Insights
+- Azure OpenAI Account and Deployment (if `foundry_model_name` is set)
+- AI Foundry Hub (MachineLearningServices workspace)
+- AI Foundry Project (MachineLearningServices workspace)
+
+Use the `create_classic_foundry_hub` variable to control **only** the Hub and Project:
+
+```hcl
+create_ai_foundry_resources = true
+create_classic_foundry_hub  = false  # Removes Hub/Project but keeps Key Vault, App Insights, OpenAI
+```
+
+This is useful when migrating from the classic Hub/Project shape to the NEW AIServices shape while preserving shared infrastructure (Key Vault, App Insights, Azure OpenAI).
+
+**Options:**
+- `create_classic_foundry_hub = null` (default) - Follow `create_ai_foundry_resources`
+- `create_classic_foundry_hub = true` - Force Hub/Project creation
+- `create_classic_foundry_hub = false` - Remove Hub/Project, keep supporting resources
 
 ### What Terraform Creates
 
