@@ -246,6 +246,30 @@ resource "azurerm_role_assignment" "func_to_doc_intel" {
 # Agent and OpenAPI Tool attachments must be configured manually in the portal
 # See: https://learn.microsoft.com/en-us/azure/ai-studio/
 
+# Key Vault for AI Foundry (required when create_ai_foundry_resources = true)
+resource "azurerm_key_vault" "foundry" {
+  count                      = var.create_ai_foundry_resources ? 1 : 0
+  name                       = substr("${var.project_name}-kv-${local.suffix}", 0, 24)
+  resource_group_name        = local.resource_group_name_final
+  location                   = var.location
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
+
+  tags = local.common_tags
+}
+
+data "azurerm_client_config" "current" {}
+
+# Grant current user access to Key Vault (needed for setup)
+resource "azurerm_role_assignment" "kv_current_user" {
+  count                = var.create_ai_foundry_resources ? 1 : 0
+  scope                = azurerm_key_vault.foundry[0].id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
 resource "azapi_resource" "ai_hub" {
   count     = var.create_ai_foundry_resources ? 1 : 0
   type      = "Microsoft.MachineLearningServices/workspaces@2024-10-01-preview"
@@ -263,13 +287,15 @@ resource "azapi_resource" "ai_hub" {
       friendlyName        = "${var.project_name} AI Hub"
       kind                = "Hub"
       storageAccount      = azurerm_storage_account.main.id
-      keyVault            = var.key_vault_id != "" ? var.key_vault_id : null
+      keyVault            = azurerm_key_vault.foundry[0].id
       applicationInsights = azurerm_application_insights.main.id
     }
     kind = "Hub"
   }
 
   tags = local.common_tags
+
+  depends_on = [azurerm_key_vault.foundry, azurerm_role_assignment.kv_current_user]
 }
 
 resource "azapi_resource" "ai_project" {
@@ -298,27 +324,39 @@ resource "azapi_resource" "ai_project" {
   depends_on = [azapi_resource.ai_hub]
 }
 
-# Model deployment (conditional - only if Foundry resources created)
-resource "azapi_resource" "model_deployment" {
-  count     = var.create_ai_foundry_resources && var.foundry_model_name != "" ? 1 : 0
-  type      = "Microsoft.CognitiveServices/accounts/deployments@2024-10-01"
-  name      = var.foundry_deployment_name
-  parent_id = azapi_resource.ai_project[0].id
+# Azure OpenAI / Cognitive Services account for model deployments
+# This is separate from the AI Foundry Hub/Project - it provides the actual AI models
+resource "azurerm_cognitive_account" "openai" {
+  count               = var.create_ai_foundry_resources && var.foundry_model_name != "" ? 1 : 0
+  name                = "${var.project_name}-openai-${local.suffix}"
+  resource_group_name = local.resource_group_name_final
+  location            = var.location
+  kind                = "OpenAI"
+  sku_name            = "S0"
 
-  body = {
-    properties = {
-      model = {
-        format  = "OpenAI"
-        name    = var.foundry_model_name
-        version = var.foundry_model_version
-      }
-      raiPolicyName = "Microsoft.Default"
-    }
-    sku = {
-      name     = "Standard"
-      capacity = var.foundry_model_capacity
-    }
+  custom_subdomain_name = "${var.project_name}-openai-${local.suffix}"
+
+  tags = local.common_tags
+}
+
+# Model deployment under the Cognitive Services account
+# Note: This creates the model deployment, but connecting it to the Foundry Project
+# must be done manually in the Azure AI Portal
+resource "azurerm_cognitive_deployment" "model" {
+  count                = var.create_ai_foundry_resources && var.foundry_model_name != "" ? 1 : 0
+  name                 = var.foundry_deployment_name
+  cognitive_account_id = azurerm_cognitive_account.openai[0].id
+
+  model {
+    format  = "OpenAI"
+    name    = var.foundry_model_name
+    version = var.foundry_model_version
   }
 
-  depends_on = [azapi_resource.ai_project]
+  sku {
+    name     = "Standard"
+    capacity = var.foundry_model_capacity
+  }
+
+  depends_on = [azurerm_cognitive_account.openai]
 }

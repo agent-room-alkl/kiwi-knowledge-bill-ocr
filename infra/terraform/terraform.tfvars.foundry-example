@@ -1,0 +1,124 @@
+# ===========================
+# Sample: Fresh Foundry Stack
+# ===========================
+# This configuration creates a complete AI Foundry stack from scratch
+# Includes: Function App + Document Intelligence + AI Foundry + Azure OpenAI + GPT-4o
+
+# ===========================
+# Project Configuration
+# ===========================
+
+project_name   = "kiwi-ocr"
+unique_suffix  = ""  # Leave empty to auto-generate (recommended)
+environment    = "dev"
+location       = "australiaeast"  # Foundry-supported: australiaeast, eastus2, westeurope
+
+# ===========================
+# Resource Group
+# ===========================
+
+use_existing_resource_group = false  # Creates new RG with all resources
+# resource_group_name = ""  # Not needed when creating new RG
+
+# ===========================
+# Storage Account
+# ===========================
+
+storage_account_tier     = "Standard"
+storage_replication_type = "LRS"
+storage_containers       = ["vikas-samples"]
+
+# Optional: Override default container names
+# batches_container_override = "custom-batches"
+# reports_container_override = "custom-reports"
+
+# ===========================
+# Document Intelligence
+# ===========================
+
+document_intelligence_sku = "S0"  # S0 recommended (F0 free tier has strict limits)
+
+# ===========================
+# App Service Plan & Function App
+# ===========================
+
+app_service_plan_sku = "B1"
+use_managed_identity = false  # Set true for production (no API keys)
+
+# ===========================
+# Azure AI Foundry (Enabled)
+# ===========================
+
+create_ai_foundry_resources = true  # This enables the full Foundry stack
+
+# Model deployment configuration
+# IMPORTANT: Check model availability in your region first:
+# https://learn.microsoft.com/azure/ai-services/openai/concepts/models
+
+foundry_model_name       = "gpt-4o"          # Latest GPT-4o model
+foundry_model_version    = "2024-05-13"      # gpt-4o version
+foundry_deployment_name  = "gpt-4o"          # Deployment name (match model name)
+foundry_model_capacity   = 10                # TPM in thousands (10 = 10,000 TPM)
+
+# Alternative model configurations:
+#
+# GPT-4 Turbo:
+# foundry_model_name       = "gpt-4"
+# foundry_model_version    = "turbo-2024-04-09"
+# foundry_deployment_name  = "gpt-4-turbo"
+#
+# GPT-3.5 Turbo (cost-effective):
+# foundry_model_name       = "gpt-35-turbo"
+# foundry_model_version    = "0125"
+# foundry_deployment_name  = "gpt-35-turbo"
+#
+# Skip model deployment (add OpenAI manually):
+# foundry_model_name       = ""
+
+# ===========================
+# Tags
+# ===========================
+
+tags = {
+  Owner       = "platform-team"
+  CostCenter  = "engineering"
+  Application = "kiwi-knowledge-bill-ocr"
+  ManagedBy   = "Terraform"
+}
+
+# ===========================
+# Deployment Steps
+# ===========================
+#
+# 1. Copy this file to terraform.tfvars:
+#    cp terraform.tfvars.foundry-example terraform.tfvars
+#
+# 2. (Optional) Customize project_name and location
+#
+# 3. Initialize and validate:
+#    terraform init -backend=false
+#    terraform validate
+#
+# 4. Plan (dry run):
+#    terraform plan -out=tfplan
+#    Review the plan - it should create ~15-20 resources
+#
+# 5. Apply (creates real Azure resources - DO NOT use production subscription):
+#    terraform apply tfplan
+#
+# 6. Deploy Function App code:
+#    FUNC_APP_NAME=$(terraform output -raw function_app_name)
+#    cd ../../function_app
+#    func azure functionapp publish $FUNC_APP_NAME
+#
+# 7. Configure Foundry (semi-automated):
+#    cd ../infra/terraform
+#    ./configure-foundry.ps1
+#
+# 8. Complete manual portal steps (from configure-foundry.ps1 output):
+#    - Create agent
+#    - Attach OpenAPI tool
+#    - Paste agent instructions
+#    - Test agent
+#
+# See FOUNDRY_SETUP.md for detailed documentation.

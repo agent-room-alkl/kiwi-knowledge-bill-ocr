@@ -57,16 +57,14 @@ use_managed_identity = false  # Set to true to use managed identity instead of A
 # Agent and OpenAPI tool attachments cannot be automated via Terraform
 # and must be configured manually in the Azure AI Portal
 
-create_ai_foundry_resources = false  # Set to true to create Hub/Project
-
-# Required if create_ai_foundry_resources = true
-# key_vault_id = "/subscriptions/xxx/resourceGroups/xxx/providers/Microsoft.KeyVault/vaults/xxx"
+create_ai_foundry_resources = false  # Set to true to create Hub/Project/OpenAI resources
 
 # Model deployment (only if create_ai_foundry_resources = true)
-foundry_model_name       = ""       # e.g., "gpt-4", "gpt-35-turbo" - leave empty to skip
-foundry_model_version    = "0613"
-foundry_deployment_name  = "gpt-4"  # Should match model name for consistency
-foundry_model_capacity   = 10       # TPM in thousands
+# Common models: gpt-4, gpt-35-turbo, gpt-4o, gpt-4-turbo
+foundry_model_name       = ""       # e.g., "gpt-4o" - leave empty to skip model deployment
+foundry_model_version    = "2024-05-13"  # Version depends on model (gpt-4o: 2024-05-13, gpt-4: 0613)
+foundry_deployment_name  = "gpt-4o"      # Should match model name for consistency
+foundry_model_capacity   = 10            # TPM in thousands
 
 # ===========================
 # Tags
