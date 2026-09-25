@@ -82,6 +82,11 @@ locals {
     },
     var.tags
   )
+
+  # Application Insights is optional for the core OCR->classify->xlsx/HTML
+  # pipeline. The AI Foundry Hub requires an Application Insights resource, so
+  # enabling Foundry forces it on regardless of the opt-in flag.
+  enable_app_insights = var.enable_application_insights || var.create_ai_foundry_resources
 }
 
 # ===========================
@@ -146,10 +151,11 @@ resource "azurerm_cognitive_account" "doc_intelligence" {
 }
 
 # ===========================
-# Application Insights
+# Application Insights (optional, opt-in)
 # ===========================
 
 resource "azurerm_application_insights" "main" {
+  count               = local.enable_app_insights ? 1 : 0
   name                = local.app_insights_name
   resource_group_name = local.resource_group_name_final
   location            = var.location
@@ -200,24 +206,29 @@ resource "azurerm_linux_function_app" "main" {
     minimum_tls_version = "1.2"
   }
 
-  app_settings = {
-    # Platform/Deployment-Managed (auto-wired from Terraform)
-    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.main.connection_string
-    "AzureWebJobsStorage"                   = azurerm_storage_account.main.primary_connection_string
-    "AzureWebJobsFeatureFlags"              = "EnableWorkerIndexing"
-    "FUNCTIONS_WORKER_RUNTIME"              = "python"
-    "WEBSITE_RUN_FROM_PACKAGE"              = "1"
+  app_settings = merge(
+    {
+      # Platform/Deployment-Managed (auto-wired from Terraform)
+      "AzureWebJobsStorage"      = azurerm_storage_account.main.primary_connection_string
+      "AzureWebJobsFeatureFlags" = "EnableWorkerIndexing"
+      "FUNCTIONS_WORKER_RUNTIME" = "python"
+      "WEBSITE_RUN_FROM_PACKAGE" = "1"
 
-    # Operator-Provided (set via terraform.tfvars)
-    "DOCUMENTINTELLIGENCE_ENDPOINT"        = azurerm_cognitive_account.doc_intelligence.endpoint
-    "DOCUMENTINTELLIGENCE_KEY"             = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence.primary_access_key
-    "STATEMENTS_STORAGE_CONNECTION_STRING" = azurerm_storage_account.main.primary_connection_string
-    "EXTRACT_ALLOWED_BINDERS"              = join(",", local.containers)
+      # Operator-Provided (set via terraform.tfvars)
+      "DOCUMENTINTELLIGENCE_ENDPOINT"        = azurerm_cognitive_account.doc_intelligence.endpoint
+      "DOCUMENTINTELLIGENCE_KEY"             = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence.primary_access_key
+      "STATEMENTS_STORAGE_CONNECTION_STRING" = azurerm_storage_account.main.primary_connection_string
+      "EXTRACT_ALLOWED_BINDERS"              = join(",", local.containers)
 
-    # Optional Container Overrides (operator can customize)
-    "REPORTS_CONTAINER" = var.reports_container_override != "" ? var.reports_container_override : "vikas-reports"
-    "BATCHES_CONTAINER" = var.batches_container_override != "" ? var.batches_container_override : "vikas-batches"
-  }
+      # Optional Container Overrides (operator can customize)
+      "REPORTS_CONTAINER" = var.reports_container_override != "" ? var.reports_container_override : "vikas-reports"
+      "BATCHES_CONTAINER" = var.batches_container_override != "" ? var.batches_container_override : "vikas-batches"
+    },
+    # Telemetry wiring only when Application Insights is created
+    local.enable_app_insights ? {
+      "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.main[0].connection_string
+    } : {}
+  )
 
   identity {
     type = "SystemAssigned"
@@ -298,7 +309,7 @@ resource "azapi_resource" "ai_hub" {
       kind                = "Hub"
       storageAccount      = azurerm_storage_account.main.id
       keyVault            = azurerm_key_vault.foundry[0].id
-      applicationInsights = azurerm_application_insights.main.id
+      applicationInsights = azurerm_application_insights.main[0].id
     }
     kind = "Hub"
   }

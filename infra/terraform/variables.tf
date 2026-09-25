@@ -149,6 +149,16 @@ variable "use_managed_identity" {
 }
 
 # ===========================
+# Observability (optional)
+# ===========================
+
+variable "enable_application_insights" {
+  description = "Create Application Insights for Function App telemetry. Not required for the core OCR->classify->xlsx/HTML pipeline; opt in when you want telemetry. Automatically forced on when create_ai_foundry_resources = true, because the AI Foundry Hub requires an Application Insights resource."
+  type        = bool
+  default     = false
+}
+
+# ===========================
 # AI Foundry
 # ===========================
 

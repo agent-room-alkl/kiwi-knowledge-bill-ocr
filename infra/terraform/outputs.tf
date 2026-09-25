@@ -55,14 +55,14 @@ output "document_intelligence_key" {
 }
 
 output "application_insights_instrumentation_key" {
-  description = "Application Insights instrumentation key"
-  value       = azurerm_application_insights.main.instrumentation_key
+  description = "Application Insights instrumentation key (null when telemetry is disabled)"
+  value       = local.enable_app_insights ? azurerm_application_insights.main[0].instrumentation_key : null
   sensitive   = true
 }
 
 output "application_insights_connection_string" {
-  description = "Application Insights connection string"
-  value       = azurerm_application_insights.main.connection_string
+  description = "Application Insights connection string (null when telemetry is disabled)"
+  value       = local.enable_app_insights ? azurerm_application_insights.main[0].connection_string : null
   sensitive   = true
 }
 
