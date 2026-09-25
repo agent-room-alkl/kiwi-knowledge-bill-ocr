@@ -56,7 +56,7 @@ create_ai_foundry_resources = true  # This enables the full Foundry stack
 # https://learn.microsoft.com/azure/ai-services/openai/concepts/models
 
 foundry_model_name       = "gpt-4o"          # Latest GPT-4o model
-foundry_model_version    = "2024-05-13"      # gpt-4o version
+foundry_model_version   = "2024-11-20"      # gpt-4o version
 foundry_deployment_name  = "gpt-4o"          # Deployment name (match model name)
 foundry_model_capacity   = 10                # TPM in thousands (10 = 10,000 TPM)
 

@@ -229,6 +229,11 @@ resource "azurerm_application_insights" "main" {
   application_type    = "web"
 
   tags = local.common_tags
+
+  lifecycle {
+    # Azure auto-links a managed Log Analytics workspace; don't try to null it
+    ignore_changes = [workspace_id]
+  }
 }
 
 locals {
@@ -314,8 +319,10 @@ resource "azurerm_linux_function_app" "main" {
 
   lifecycle {
     ignore_changes = [
-      # Allow manual code deployments without Terraform drift
-      app_settings["WEBSITE_RUN_FROM_PACKAGE"],
+      # After create, Azure/portal and code deploys mutate these; keep TF from thrashing live app
+      app_settings,
+      site_config[0].application_insights_connection_string,
+      site_config[0].application_insights_key,
     ]
   }
 }
@@ -372,6 +379,11 @@ resource "azurerm_key_vault" "foundry" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    # Hub/Project identities get access policies after create; do not strip them
+    ignore_changes = [access_policy]
+  }
 }
 
 resource "azapi_resource" "ai_hub" {
@@ -389,7 +401,6 @@ resource "azapi_resource" "ai_hub" {
     properties = {
       description         = "AI Foundry Hub for ${var.project_name}"
       friendlyName        = "${var.project_name} AI Hub"
-      kind                = "Hub"
       storageAccount      = local.storage_account_id
       keyVault            = azurerm_key_vault.foundry[0].id
       applicationInsights = local.app_insights_id
@@ -417,7 +428,6 @@ resource "azapi_resource" "ai_project" {
     properties = {
       description   = "AI Foundry Project for ${var.project_name}"
       friendlyName  = "${var.project_name} AI Project"
-      kind          = "Project"
       hubResourceId = azapi_resource.ai_hub[0].id
     }
     kind = "Project"
@@ -463,4 +473,9 @@ resource "azurerm_cognitive_deployment" "model" {
   }
 
   depends_on = [azurerm_cognitive_account.openai]
+
+  lifecycle {
+    # Azure assigns Microsoft.DefaultV2 after create
+    ignore_changes = [rai_policy_name]
+  }
 }
