@@ -185,17 +185,47 @@ To create AI Foundry Hub/Project via Terraform:
 
 ```hcl
 create_ai_foundry_resources = true
-key_vault_id                = "/subscriptions/.../vaults/your-kv"
 foundry_model_name          = "gpt-4"
 foundry_model_version       = "0613"
 foundry_deployment_name     = "gpt-4"
+foundry_ai_services_sku     = "S0"  # optional, defaults to S0
 ```
 
-**LIMITATIONS:**
+**What Terraform Creates (when `create_ai_foundry_resources = true`):**
 
-- AI Foundry Agent creation is NOT supported via Terraform
-- OpenAPI tool attachment is NOT supported via Terraform
-- These must be configured manually in the Azure AI Portal after deployment
+- ✅ Key Vault (required for Foundry Hub)
+- ✅ Azure AI Services account (required for model deployments)
+- ✅ AI Foundry Hub
+- ✅ AI Foundry Project
+- ✅ Model Deployment (if `foundry_model_name` is set)
+
+**What You Must Configure Manually (no Terraform/API available):**
+
+- ❌ AI Foundry Agent creation
+- ❌ OpenAPI tool attachment to Agent
+- ❌ Agent instructions/system prompt
+
+**Post-Apply Configuration:**
+
+After `terraform apply`, run the configuration script:
+
+```powershell
+cd infra/terraform
+pwsh ./configure-foundry.ps1
+```
+
+This script:
+1. Generates `foundry/openapi-servicing-<suffix>.json` with the correct Function App URL
+2. Retrieves the Function App key from Azure (secure, not from Terraform output)
+3. Displays step-by-step instructions for manual Foundry Agent setup in the portal
+
+Or use the integrated deployment wrapper:
+
+```powershell
+.\deploy.ps1 -Action generate-openapi
+```
+
+**IMPORTANT:** The generated `openapi-servicing-<suffix>.json` file is environment-specific and must **NOT** be committed to Git. Add `foundry/openapi-servicing-*.json` to `.gitignore`.
 
 Leave `create_ai_foundry_resources = false` (default) to configure Foundry completely manually.
 
@@ -388,6 +418,26 @@ For issues:
 3. Review plan output: `terraform plan`
 4. Check Azure Portal for resource status
 
+## Recent Fixes (T-23 Audit)
+
+**Bug #1: Model Deployment Parent** (FIXED)
+- Issue: `azapi_resource.model_deployment` incorrectly pointed `parent_id` at the AI Project workspace
+- Fix: Created `azurerm_cognitive_account.ai_services` (AIServices kind) and parent the deployment under it
+- Model deployments must be children of CognitiveServices/accounts, not MachineLearningServices/workspaces
+
+**Bug #2: Key Vault Requirement** (FIXED)
+- Issue: AI Hub accepted `keyVault = null` but Foundry requires a Key Vault for proper operation
+- Fix: Created `azurerm_key_vault.foundry` when `create_ai_foundry_resources = true` and wire it to the Hub
+- Removed `var.key_vault_id` (no longer needed - Terraform creates the vault)
+
+**Bug #3: Agent + OpenAPI Tool Attachment** (DOCUMENTED + SCRIPTED)
+- Issue: Cannot be automated via Terraform (no API available)
+- Fix: Created `configure-foundry.ps1` PowerShell script that:
+  - Generates environment-specific OpenAPI spec with correct Function URL (addresses Cursor Point A)
+  - Retrieves Function key from Azure CLI at runtime (addresses Cursor Point B)
+  - Provides clear manual instructions for portal-based Agent setup
+  - Ensures Function key never lands in Terraform outputs or committed files
+
 ## Files in This Directory
 
 - `main.tf` - Main infrastructure resources
@@ -395,7 +445,8 @@ For issues:
 - `outputs.tf` - Output values
 - `terraform.tfvars.example` - Example configuration (copy to `terraform.tfvars`)
 - `README.md` - This file
-- `deploy.ps1` - Windows PowerShell deployment script
+- `deploy.ps1` - Windows PowerShell deployment script (includes generate-openapi action)
+- `configure-foundry.ps1` - Post-apply configuration script for Foundry setup
 - `.terraform/` - Terraform cache (generated, not committed)
 - `terraform.tfstate*` - State files (generated, not committed, sensitive)
 - `tfplan` - Plan file (generated, not committed)

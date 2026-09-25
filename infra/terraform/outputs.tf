@@ -81,6 +81,21 @@ output "ai_foundry_project_name" {
   value       = var.create_ai_foundry_resources ? azapi_resource.ai_project[0].name : null
 }
 
+output "ai_foundry_key_vault_name" {
+  description = "Key Vault name for AI Foundry (if created)"
+  value       = var.create_ai_foundry_resources ? azurerm_key_vault.foundry[0].name : null
+}
+
+output "ai_foundry_ai_services_name" {
+  description = "AI Services account name (if created)"
+  value       = var.create_ai_foundry_resources ? azurerm_cognitive_account.ai_services[0].name : null
+}
+
+output "ai_foundry_ai_services_endpoint" {
+  description = "AI Services endpoint (if created)"
+  value       = var.create_ai_foundry_resources ? azurerm_cognitive_account.ai_services[0].endpoint : null
+}
+
 output "ai_foundry_model_deployment_name" {
   description = "AI Foundry model deployment name (if created)"
   value       = var.create_ai_foundry_resources && var.foundry_model_name != "" ? azapi_resource.model_deployment[0].name : null
@@ -112,8 +127,13 @@ output "deployment_summary" {
       endpoint = azurerm_cognitive_account.doc_intelligence.endpoint
     }
     ai_foundry = var.create_ai_foundry_resources ? {
-      project_name = azapi_resource.ai_project[0].name
-      portal_url   = "https://ai.azure.com"
+      project_name         = azapi_resource.ai_project[0].name
+      hub_name             = azapi_resource.ai_hub[0].name
+      key_vault_name       = azurerm_key_vault.foundry[0].name
+      ai_services_name     = azurerm_cognitive_account.ai_services[0].name
+      ai_services_endpoint = azurerm_cognitive_account.ai_services[0].endpoint
+      model_deployment     = var.foundry_model_name != "" ? azapi_resource.model_deployment[0].name : null
+      portal_url           = "https://ai.azure.com"
     } : null
   }
 }
@@ -133,30 +153,37 @@ output "next_steps" {
        cd ../function_app
        func azure functionapp publish ${azurerm_linux_function_app.main.name}
     
-    2. Get Function App key:
-       func azure functionapp list-functions ${azurerm_linux_function_app.main.name} --show-keys
+    2. Get Function App key (SECURE - DO NOT COMMIT):
+       Option A: Azure Functions Core Tools
+         func azure functionapp list-functions ${azurerm_linux_function_app.main.name} --show-keys
+       Option B: Azure CLI
+         az functionapp keys list --name ${azurerm_linux_function_app.main.name} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv
+       Option C: Store in Key Vault (recommended for production)
+         az keyvault secret set --vault-name <vault-name> --name function-key --value <key-from-above>
        
-    3. Update OpenAPI spec with Function URL:
-       Edit foundry/openapi-servicing.json
-       Set servers[0].url to: https://${azurerm_linux_function_app.main.default_hostname}/api
+    3. Generate OpenAPI spec with correct Function URL:
+       Option A: PowerShell script (Windows)
+         cd infra/terraform
+         .\deploy.ps1 -Action generate-openapi
+         # Creates foundry/openapi-servicing-<suffix>.json with correct server URL
+         # DO NOT COMMIT THIS FILE
+       Option B: Manual (cross-platform)
+         Run: pwsh infra/terraform/configure-foundry.ps1
+         Or edit foundry/openapi-servicing.json manually:
+           Set servers[0].url = "https://${azurerm_linux_function_app.main.default_hostname}/api"
     
-    4. Configure AI Foundry (if not created via Terraform):
-       - Go to https://ai.azure.com
-       - Create a new project (or use existing)
-       - Create a Foundry agent
-       - Add OpenAPI tool: foundry/openapi-servicing.json
-       - Set up PROJECT CONNECTION with Function key (x-functions-key)
-       - Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt
-    
-    ${var.create_ai_foundry_resources ? "5. MANUAL: Configure Foundry Agent and OpenAPI Tool\n       Terraform cannot create Agents or attach OpenAPI tools.\n       - Portal: https://ai.azure.com\n       - Project: ${azapi_resource.ai_project[0].name}\n       - Add the agent manually\n       - Attach OpenAPI tool from foundry/openapi-servicing.json\n" : ""}
+    ${var.create_ai_foundry_resources ? "4. MANUAL: Configure AI Foundry Agent and OpenAPI Tool\n       Terraform creates the Hub, Project, AI Services, and model deployment,\n       but CANNOT create Agents or attach OpenAPI tools via API.\n       \n       Portal: https://ai.azure.com\n       Project: ${azapi_resource.ai_project[0].name}\n       AI Services Endpoint: ${azurerm_cognitive_account.ai_services[0].endpoint}\n       Model Deployment: ${var.foundry_model_name != "" ? azapi_resource.model_deployment[0].name : "none (set foundry_model_name)"}\n       \n       Steps in Azure AI Portal:\n       a) Navigate to project ${azapi_resource.ai_project[0].name}\n       b) Create a new agent\n       c) Add OpenAPI tool:\n          - Upload the generated openapi-servicing-<suffix>.json (from step 3)\n          - Create PROJECT CONNECTION with Function key as 'x-functions-key' header\n          - Select the connection for the tool (do not paste key into tool spec)\n       d) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n       \n       See: foundry/HOW_TO_HANG_TOOLS.md\n" : "4. Configure AI Foundry (manual - Terraform did not create Hub/Project):\n       - Go to https://ai.azure.com\n       - Create a new Hub and Project\n       - Create a Foundry agent\n       - Add OpenAPI tool using generated spec from step 3\n       - Set up PROJECT CONNECTION with Function key (x-functions-key)\n       - Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n"}
     
     Storage Containers: ${join(", ", local.containers)}
     Document Intelligence Endpoint: ${azurerm_cognitive_account.doc_intelligence.endpoint}
+    ${var.create_ai_foundry_resources ? "Key Vault: ${azurerm_key_vault.foundry[0].name}" : ""}
     
     SECURITY NOTES:
-    - Function keys are sensitive - retrieve via Azure CLI, never commit
+    - Function keys are SENSITIVE - retrieve via Azure CLI or Key Vault, NEVER commit to Git
+    - Function keys must NOT appear in terraform outputs, committed files, or OpenAPI specs
+    - Generated openapi-servicing-<suffix>.json is environment-specific - DO NOT COMMIT
     - Storage connection strings marked sensitive in outputs
-    - Use 'terraform output -json' to access sensitive values
+    - Use 'terraform output -json' to access sensitive values (storage keys, Document Intelligence key)
     - Configure remote state backend before production use
     EOT
 }

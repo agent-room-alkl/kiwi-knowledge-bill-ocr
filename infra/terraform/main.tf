@@ -44,6 +44,9 @@ provider "azapi" {
 
 provider "random" {}
 
+# Required for Key Vault access policy configuration
+data "azurerm_client_config" "current" {}
+
 # ===========================
 # Random Suffix for Unique Names
 # ===========================
@@ -246,6 +249,52 @@ resource "azurerm_role_assignment" "func_to_doc_intel" {
 # Agent and OpenAPI Tool attachments must be configured manually in the portal
 # See: https://learn.microsoft.com/en-us/azure/ai-studio/
 
+# Key Vault (required for AI Foundry Hub)
+resource "azurerm_key_vault" "foundry" {
+  count                      = var.create_ai_foundry_resources ? 1 : 0
+  name                       = "${var.project_name}-kv-${local.suffix}"
+  resource_group_name        = local.resource_group_name_final
+  location                   = var.location
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
+
+  access_policy {
+    tenant_id = data.azurerm_client_config.current.tenant_id
+    object_id = data.azurerm_client_config.current.object_id
+
+    key_permissions = [
+      "Get", "List", "Create", "Delete", "Update", "Recover", "Purge", "GetRotationPolicy"
+    ]
+
+    secret_permissions = [
+      "Get", "List", "Set", "Delete", "Recover", "Purge"
+    ]
+
+    certificate_permissions = [
+      "Get", "List", "Create", "Delete", "Update", "Recover", "Purge"
+    ]
+  }
+
+  tags = local.common_tags
+}
+
+# Azure Cognitive Services multi-service account (required for model deployments)
+# Using "CognitiveServices" kind which provides multi-service API access
+resource "azurerm_cognitive_account" "ai_services" {
+  count               = var.create_ai_foundry_resources ? 1 : 0
+  name                = "${var.project_name}-aiservices-${local.suffix}"
+  resource_group_name = local.resource_group_name_final
+  location            = var.location
+  kind                = "CognitiveServices"
+  sku_name            = var.foundry_ai_services_sku
+
+  custom_subdomain_name = "${var.project_name}-aiservices-${local.suffix}"
+
+  tags = local.common_tags
+}
+
 resource "azapi_resource" "ai_hub" {
   count     = var.create_ai_foundry_resources ? 1 : 0
   type      = "Microsoft.MachineLearningServices/workspaces@2024-10-01-preview"
@@ -263,13 +312,15 @@ resource "azapi_resource" "ai_hub" {
       friendlyName        = "${var.project_name} AI Hub"
       kind                = "Hub"
       storageAccount      = azurerm_storage_account.main.id
-      keyVault            = var.key_vault_id != "" ? var.key_vault_id : null
+      keyVault            = azurerm_key_vault.foundry[0].id
       applicationInsights = azurerm_application_insights.main.id
     }
     kind = "Hub"
   }
 
   tags = local.common_tags
+
+  depends_on = [azurerm_key_vault.foundry]
 }
 
 resource "azapi_resource" "ai_project" {
@@ -299,11 +350,12 @@ resource "azapi_resource" "ai_project" {
 }
 
 # Model deployment (conditional - only if Foundry resources created)
+# FIXED: Parent must be the Cognitive Services/AIServices account, not the AI Project
 resource "azapi_resource" "model_deployment" {
   count     = var.create_ai_foundry_resources && var.foundry_model_name != "" ? 1 : 0
   type      = "Microsoft.CognitiveServices/accounts/deployments@2024-10-01"
   name      = var.foundry_deployment_name
-  parent_id = azapi_resource.ai_project[0].id
+  parent_id = azurerm_cognitive_account.ai_services[0].id
 
   body = {
     properties = {
@@ -320,5 +372,5 @@ resource "azapi_resource" "model_deployment" {
     }
   }
 
-  depends_on = [azapi_resource.ai_project]
+  depends_on = [azurerm_cognitive_account.ai_services, azapi_resource.ai_project]
 }

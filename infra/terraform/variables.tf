@@ -158,10 +158,15 @@ variable "create_ai_foundry_resources" {
   default     = false
 }
 
-variable "key_vault_id" {
-  description = "Existing Key Vault resource ID for AI Foundry (required if create_ai_foundry_resources is true)"
+variable "foundry_ai_services_sku" {
+  description = "AI Services SKU for model deployments (S0 = standard, S = multi-service)"
   type        = string
-  default     = ""
+  default     = "S0"
+
+  validation {
+    condition     = contains(["S0", "S"], var.foundry_ai_services_sku)
+    error_message = "SKU must be S0 (standard) or S (multi-service)"
+  }
 }
 
 variable "foundry_model_name" {
