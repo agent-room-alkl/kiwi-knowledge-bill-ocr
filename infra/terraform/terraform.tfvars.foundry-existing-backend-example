@@ -1,0 +1,155 @@
+# ===========================
+# Terraform Configuration for AI Foundry Resources ONLY
+# Scenario: Add Foundry to existing Function App infrastructure
+# ===========================
+#
+# This example shows how to deploy ONLY AI Foundry resources (Hub, Project,
+# Key Vault, Azure OpenAI) into an EXISTING resource group that already has
+# a running Function App, Storage Account, and Application Insights.
+#
+# Use Case: Robin's existing demo RG "kiwidemo-rg-b923ue" with Function App
+# "kiwidemo-func-b923ue" and other backend resources already deployed.
+#
+# What gets CREATED:
+# - Key Vault (for Foundry secrets)
+# - AI Foundry Hub
+# - AI Foundry Project
+# - Azure OpenAI Account (optional)
+# - Model Deployment (optional)
+#
+# What gets REUSED (via data sources):
+# - Existing Resource Group
+# - Existing Storage Account (referenced by Hub)
+# - Existing Application Insights (referenced by Hub)
+# - Existing Function App (for OpenAPI URL outputs)
+#
+# What does NOT get created:
+# - Storage Account
+# - Storage Containers
+# - Document Intelligence
+# - App Service Plan
+# - Function App
+# - Application Insights
+#
+# IMPORTANT: Ensure unique_suffix creates NEW names for Foundry resources that
+# don't collide with existing backend resource names.
+
+# ===========================
+# Core Configuration
+# ===========================
+
+subscription_id = "39993ea2-aaaa-499f-af2c-990d41279d3a"
+project_name    = "kiwidemo"
+location        = "australiaeast"
+environment     = "dev"
+
+# Use a NEW suffix for Foundry resources to avoid name collisions
+# Existing backend uses "b923ue", so use different suffix like "fnd01" or "foundry"
+unique_suffix = "fnd01"
+
+# ===========================
+# Resource Group - Use Existing
+# ===========================
+
+use_existing_resource_group = true
+resource_group_name         = "kiwidemo-rg-b923ue"
+
+# ===========================
+# Backend Resources - Use Existing
+# ===========================
+
+use_existing_backend = true
+
+# Required: Names of existing backend resources
+existing_function_app_name     = "kiwidemo-func-b923ue"
+existing_storage_account_name  = "kiwidemosab923ue"
+existing_app_insights_name     = "kiwidemo-ai-b923ue"
+
+# Optional: Specify if needed for reference in outputs
+existing_document_intelligence_name = "kiwidemo-di-b923ue"
+existing_app_service_plan_name      = "kiwidemo-asp-b923ue"
+
+# ===========================
+# AI Foundry Resources - Create New
+# ===========================
+
+create_ai_foundry_resources = true
+
+# Model configuration (GPT-4o recommended)
+foundry_model_name       = "gpt-4o"
+foundry_model_version    = "2024-05-13"
+foundry_deployment_name  = "gpt-4o"
+foundry_model_capacity   = 10
+
+# ===========================
+# Backend Resource Settings
+# ===========================
+# These are NOT used when use_existing_backend=true
+# but included for reference/documentation
+
+# Storage (not created)
+storage_account_tier     = "Standard"
+storage_replication_type = "LRS"
+storage_containers       = ["vikas-samples"]
+
+# Document Intelligence (not created)
+document_intelligence_sku = "S0"
+
+# App Service Plan (not created)
+app_service_plan_sku = "B1"
+
+# Managed Identity (existing Function App already has it)
+use_managed_identity = false
+
+# Application Insights (using existing)
+enable_application_insights = false  # Ignored when use_existing_backend=true
+
+# ===========================
+# Tags
+# ===========================
+
+tags = {
+  Owner       = "Robin"
+  CostCenter  = "Engineering"
+  Project     = "Kiwi OCR Demo"
+  Deployment  = "Foundry-Only"
+}
+
+# ===========================
+# Expected Resources Created
+# ===========================
+#
+# With these settings, Terraform will create:
+# 1. kiwidemo-kv-fnd01 (Key Vault, max 24 chars)
+# 2. kiwidemo-aihub-fnd01 (AI Foundry Hub)
+# 3. kiwidemo-aiproject-fnd01 (AI Foundry Project)
+# 4. kiwidemo-openai-fnd01 (Azure OpenAI Account)
+# 5. gpt-4o (Model Deployment under OpenAI account)
+#
+# Terraform will reference existing:
+# 1. kiwidemo-rg-b923ue (Resource Group)
+# 2. kiwidemosab923ue (Storage Account)
+# 3. kiwidemo-ai-b923ue (Application Insights)
+# 4. kiwidemo-func-b923ue (Function App)
+#
+# Outputs will point to:
+# - Function URL: https://kiwidemo-func-b923ue.azurewebsites.net/api
+# - OpenAPI spec should use this URL
+
+# ===========================
+# Validation Command
+# ===========================
+#
+# terraform plan -var-file=terraform.tfvars.foundry-existing-backend-example
+#
+# Expected plan summary:
+# - ~5-6 resources to add (Key Vault, Hub, Project, OpenAI, Deployment)
+# - 0 resources to destroy
+# - 0 resources to change (except platform-managed)
+#
+# Should NOT see:
+# - azurerm_storage_account.main
+# - azurerm_cognitive_account.doc_intelligence
+# - azurerm_service_plan.main
+# - azurerm_linux_function_app.main
+# - azurerm_application_insights.main

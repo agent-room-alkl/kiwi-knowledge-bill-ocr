@@ -5,27 +5,27 @@ output "resource_group_name" {
 
 output "function_app_name" {
   description = "Name of the Function App"
-  value       = azurerm_linux_function_app.main.name
+  value       = local.function_app_name_final
 }
 
 output "function_app_url" {
   description = "Function App base URL"
-  value       = "https://${azurerm_linux_function_app.main.default_hostname}"
+  value       = "https://${local.function_app_default_hostname}"
 }
 
 output "function_api_base_url" {
   description = "Function App API base URL (for OpenAPI spec)"
-  value       = "https://${azurerm_linux_function_app.main.default_hostname}/api"
+  value       = "https://${local.function_app_default_hostname}/api"
 }
 
 output "function_app_principal_id" {
   description = "Function App managed identity principal ID"
-  value       = azurerm_linux_function_app.main.identity[0].principal_id
+  value       = local.function_app_principal_id
 }
 
 output "storage_account_name" {
   description = "Name of the storage account"
-  value       = azurerm_storage_account.main.name
+  value       = local.storage_account_name_final
 }
 
 output "storage_containers" {
@@ -39,30 +39,30 @@ output "storage_containers" {
 
 output "storage_connection_string" {
   description = "Storage account connection string"
-  value       = azurerm_storage_account.main.primary_connection_string
+  value       = local.storage_account_primary_conn_str
   sensitive   = true
 }
 
 output "document_intelligence_endpoint" {
-  description = "Document Intelligence endpoint URL"
-  value       = azurerm_cognitive_account.doc_intelligence.endpoint
+  description = "Document Intelligence endpoint URL (null when using existing backend without DI reference)"
+  value       = local.create_backend_resources ? azurerm_cognitive_account.doc_intelligence[0].endpoint : (var.existing_document_intelligence_name != "" ? data.azurerm_cognitive_account.existing_doc_intelligence[0].endpoint : null)
 }
 
 output "document_intelligence_key" {
-  description = "Document Intelligence API key"
-  value       = azurerm_cognitive_account.doc_intelligence.primary_access_key
+  description = "Document Intelligence API key (null when using existing backend without DI reference)"
+  value       = local.create_backend_resources ? azurerm_cognitive_account.doc_intelligence[0].primary_access_key : (var.existing_document_intelligence_name != "" ? data.azurerm_cognitive_account.existing_doc_intelligence[0].primary_access_key : null)
   sensitive   = true
 }
 
 output "application_insights_instrumentation_key" {
   description = "Application Insights instrumentation key (null when telemetry is disabled)"
-  value       = local.enable_app_insights ? azurerm_application_insights.main[0].instrumentation_key : null
+  value       = local.app_insights_instrumentation_key
   sensitive   = true
 }
 
 output "application_insights_connection_string" {
   description = "Application Insights connection string (null when telemetry is disabled)"
-  value       = local.enable_app_insights ? azurerm_application_insights.main[0].connection_string : null
+  value       = local.app_insights_connection_string
   sensitive   = true
 }
 
@@ -115,18 +115,21 @@ output "deployment_summary" {
   description = "Deployment summary with key information"
   value = {
     function_app = {
-      name     = azurerm_linux_function_app.main.name
-      url      = "https://${azurerm_linux_function_app.main.default_hostname}"
-      api_base = "https://${azurerm_linux_function_app.main.default_hostname}/api"
+      name     = local.function_app_name_final
+      url      = "https://${local.function_app_default_hostname}"
+      api_base = "https://${local.function_app_default_hostname}/api"
     }
     storage = {
-      account    = azurerm_storage_account.main.name
+      account    = local.storage_account_name_final
       containers = local.containers
     }
-    document_intelligence = {
-      name     = azurerm_cognitive_account.doc_intelligence.name
-      endpoint = azurerm_cognitive_account.doc_intelligence.endpoint
-    }
+    document_intelligence = local.create_backend_resources ? {
+      name     = azurerm_cognitive_account.doc_intelligence[0].name
+      endpoint = azurerm_cognitive_account.doc_intelligence[0].endpoint
+    } : (var.existing_document_intelligence_name != "" ? {
+      name     = var.existing_document_intelligence_name
+      endpoint = data.azurerm_cognitive_account.existing_doc_intelligence[0].endpoint
+    } : null)
     ai_foundry = var.create_ai_foundry_resources ? {
       project_name     = azapi_resource.ai_project[0].name
       portal_url       = "https://ai.azure.com"
@@ -143,38 +146,16 @@ output "next_steps" {
     DEPLOYMENT COMPLETE
     ===========================
     
-    Function App API Base URL: https://${azurerm_linux_function_app.main.default_hostname}/api
+    Function App API Base URL: https://${local.function_app_default_hostname}/api
     
     NEXT STEPS:
     
-    1. Deploy Function App code:
-       cd ../function_app
-       func azure functionapp publish ${azurerm_linux_function_app.main.name}
-    
-    2. Get Function App key (SECURE - DO NOT COMMIT):
-       Option A: Azure Functions Core Tools
-         func azure functionapp list-functions ${azurerm_linux_function_app.main.name} --show-keys
-       Option B: Azure CLI
-         az functionapp keys list --name ${azurerm_linux_function_app.main.name} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv
-       Option C: Store in Key Vault (recommended for production)
-         az keyvault secret set --vault-name <vault-name> --name function-key --value <key-from-above>
-       
-    3. Generate OpenAPI spec with correct Function URL:
-       Option A: PowerShell script (Windows)
-         cd infra/terraform
-         .\deploy.ps1 -Action generate-openapi
-         # Creates foundry/openapi-servicing-<suffix>.json with correct server URL
-         # DO NOT COMMIT THIS FILE
-       Option B: Manual (cross-platform)
-         Run: pwsh infra/terraform/configure-foundry.ps1
-         Or edit foundry/openapi-servicing.json manually:
-           Set servers[0].url = "https://${azurerm_linux_function_app.main.default_hostname}/api"
-    
-    ${var.create_ai_foundry_resources ? "4. Configure AI Foundry Agent and OpenAPI Tool (MANUAL STEPS REQUIRED):\n       \n       Terraform has created:\n       - AI Foundry Hub: ${azapi_resource.ai_hub[0].name}\n       - AI Foundry Project: ${azapi_resource.ai_project[0].name}\n       - Key Vault: ${azurerm_key_vault.foundry[0].name}\n       ${var.foundry_model_name != "" ? "- Azure OpenAI: ${azurerm_cognitive_account.openai[0].name}\n       - Model Deployment: ${azurerm_cognitive_deployment.model[0].name} (${var.foundry_model_name})\n       \n       MANUAL PORTAL STEPS:\n       a) Go to Azure AI Portal: https://ai.azure.com\n       b) Open project: ${azapi_resource.ai_project[0].name}\n       c) In project, go to 'Connected resources' and add the OpenAI connection:\n          - Resource: ${azurerm_cognitive_account.openai[0].name}\n          - API key from: terraform output -raw ai_foundry_openai_key\n       d) Create a Foundry Agent in the project\n       e) Attach OpenAPI tool to the agent:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - Create PROJECT CONNECTION with Function key as 'x-functions-key'\n          - Get key: func azure functionapp list-functions ${azurerm_linux_function_app.main.name} --show-keys\n       f) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n       \n       See: foundry/HOW_TO_HANG_TOOLS.md for detailed steps\n" : "- OpenAI endpoint: ${azurerm_cognitive_account.openai[0].endpoint}\n       - Model: ${var.foundry_model_name}\n       \n       MANUAL PORTAL STEPS:\n       a) Go to: https://ai.azure.com\n       b) Open project: ${azapi_resource.ai_project[0].name}\n       c) Create a Foundry Agent\n       d) Attach OpenAPI tool:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - CREATE PROJECT CONNECTION with Function key as 'x-functions-key'\n       e) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n"}" : "4. Configure AI Foundry (if not created via Terraform):\n       - Go to https://ai.azure.com\n       - Create a new project (or use existing)\n       - Create a Foundry agent\n       - Add OpenAPI tool: foundry/openapi-servicing.json\n       - Set up PROJECT CONNECTION with Function key (x-functions-key)\n       - Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt"}
+    ${!var.use_existing_backend ? "1. Deploy Function App code:\n       cd ../function_app\n       func azure functionapp publish ${local.function_app_name_final}\n    \n    2. Get Function App key (SECURE - DO NOT COMMIT):\n       Option A: Azure Functions Core Tools\n         func azure functionapp list-functions ${local.function_app_name_final} --show-keys\n       Option B: Azure CLI\n         az functionapp keys list --name ${local.function_app_name_final} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv\n       Option C: Store in Key Vault (recommended for production)\n         az keyvault secret set --vault-name <vault-name> --name function-key --value <key-from-above>\n       \n    3. Generate OpenAPI spec with correct Function URL:\n       Option A: PowerShell script (Windows)\n         cd infra/terraform\n         .\\deploy.ps1 -Action generate-openapi\n         # Creates foundry/openapi-servicing-<suffix>.json with correct server URL\n         # DO NOT COMMIT THIS FILE\n       Option B: Manual (cross-platform)\n         Run: pwsh infra/terraform/configure-foundry.ps1\n         Or edit foundry/openapi-servicing.json manually:\n           Set servers[0].url = \"https://${local.function_app_default_hostname}/api\"\n    " : "NOTE: Using EXISTING backend resources (use_existing_backend=true)\n    - Function App: ${local.function_app_name_final}\n    - Storage Account: ${local.storage_account_name_final}\n    - App Insights: ${var.existing_app_insights_name}\n    \n    1. Get Function App key (if not already retrieved):\n       az functionapp keys list --name ${local.function_app_name_final} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv\n    \n    2. OpenAPI spec should already point to: https://${local.function_app_default_hostname}/api\n    "}
+    ${var.create_ai_foundry_resources ? "AI FOUNDRY CONFIGURATION (MANUAL STEPS REQUIRED):\n       \n       Terraform has created:\n       - AI Foundry Hub: ${azapi_resource.ai_hub[0].name}\n       - AI Foundry Project: ${azapi_resource.ai_project[0].name}\n       - Key Vault: ${azurerm_key_vault.foundry[0].name}\n       ${var.foundry_model_name != "" ? "- Azure OpenAI: ${azurerm_cognitive_account.openai[0].name}\n       - Model Deployment: ${azurerm_cognitive_deployment.model[0].name} (${var.foundry_model_name})\n       \n       MANUAL PORTAL STEPS:\n       a) Go to Azure AI Portal: https://ai.azure.com\n       b) Open project: ${azapi_resource.ai_project[0].name}\n       c) In project, go to 'Connected resources' and add the OpenAI connection:\n          - Resource: ${azurerm_cognitive_account.openai[0].name}\n          - API key from: terraform output -raw ai_foundry_openai_key\n       d) Create a Foundry Agent in the project\n       e) Attach OpenAPI tool to the agent:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - Create PROJECT CONNECTION with Function key as 'x-functions-key'\n          - Get key: az functionapp keys list --name ${local.function_app_name_final} --resource-group ${local.resource_group_name_final} --query functionKeys.default -o tsv\n       f) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n       \n       See: foundry/HOW_TO_HANG_TOOLS.md for detailed steps\n" : "- OpenAI endpoint: ${azurerm_cognitive_account.openai[0].endpoint}\n       - Model: ${var.foundry_model_name}\n       \n       MANUAL PORTAL STEPS:\n       a) Go to: https://ai.azure.com\n       b) Open project: ${azapi_resource.ai_project[0].name}\n       c) Create a Foundry Agent\n       d) Attach OpenAPI tool:\n          - Upload: foundry/openapi-servicing.json (with updated Function URL)\n          - CREATE PROJECT CONNECTION with Function key as 'x-functions-key'\n       e) Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt\n"}" : "Configure AI Foundry (if not created via Terraform):\n       - Go to https://ai.azure.com\n       - Create a new project (or use existing)\n       - Create a Foundry agent\n       - Add OpenAPI tool: foundry/openapi-servicing.json\n       - Set up PROJECT CONNECTION with Function key (x-functions-key)\n       - Paste agent instructions from: foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt"}
     
     
     Storage Containers: ${join(", ", local.containers)}
-    Document Intelligence Endpoint: ${azurerm_cognitive_account.doc_intelligence.endpoint}
+    ${local.create_backend_resources || var.existing_document_intelligence_name != "" ? "Document Intelligence Endpoint: ${local.create_backend_resources ? azurerm_cognitive_account.doc_intelligence[0].endpoint : data.azurerm_cognitive_account.existing_doc_intelligence[0].endpoint}" : ""}
     ${var.create_ai_foundry_resources ? "Key Vault: ${azurerm_key_vault.foundry[0].name}" : ""}
     
     SECURITY NOTES:

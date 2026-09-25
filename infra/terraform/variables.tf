@@ -60,6 +60,46 @@ variable "resource_group_name" {
 }
 
 # ===========================
+# Backend Resources (optional reuse)
+# ===========================
+
+variable "use_existing_backend" {
+  description = "Use existing backend resources (Storage, Function App, App Insights, etc.) instead of creating new ones. Enables Foundry-only deployment into an existing resource group with running infrastructure."
+  type        = bool
+  default     = false
+}
+
+variable "existing_function_app_name" {
+  description = "Name of existing Function App. Required when use_existing_backend=true. Used for outputs/OpenAPI URL."
+  type        = string
+  default     = ""
+}
+
+variable "existing_storage_account_name" {
+  description = "Name of existing Storage Account. Required when use_existing_backend=true."
+  type        = string
+  default     = ""
+}
+
+variable "existing_app_insights_name" {
+  description = "Name of existing Application Insights. Required when use_existing_backend=true. Used by AI Foundry Hub."
+  type        = string
+  default     = ""
+}
+
+variable "existing_document_intelligence_name" {
+  description = "Name of existing Document Intelligence account (optional). Specify when use_existing_backend=true if needed for reference."
+  type        = string
+  default     = ""
+}
+
+variable "existing_app_service_plan_name" {
+  description = "Name of existing App Service Plan (optional). Specify when use_existing_backend=true if needed for reference."
+  type        = string
+  default     = ""
+}
+
+# ===========================
 # Storage Account
 # ===========================
 

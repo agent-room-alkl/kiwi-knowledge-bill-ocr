@@ -48,10 +48,28 @@ provider "random" {}
 data "azurerm_client_config" "current" {}
 
 # ===========================
+# Validation for Existing Backend Configuration
+# ===========================
+
+locals {
+  # Validate that required existing resource names are provided when use_existing_backend=true
+  validate_existing_backend = var.use_existing_backend && (
+    var.existing_function_app_name == "" ||
+    var.existing_storage_account_name == "" ||
+    var.existing_app_insights_name == ""
+  ) ? tobool("ERROR: When use_existing_backend=true, you must provide existing_function_app_name, existing_storage_account_name, and existing_app_insights_name") : true
+
+  # Validate that use_existing_resource_group is also true when use_existing_backend is true
+  validate_rg_with_backend = var.use_existing_backend && !var.use_existing_resource_group ? tobool("ERROR: When use_existing_backend=true, use_existing_resource_group must also be true and resource_group_name must be set") : true
+}
+
+# ===========================
 # Random Suffix for Unique Names
 # ===========================
 
 resource "random_string" "suffix" {
+  # Only generate random suffix when not using existing backend or unique_suffix not provided
+  count   = var.use_existing_backend && var.unique_suffix != "" ? 0 : 1
   length  = 6
   special = false
   upper   = false
@@ -60,7 +78,9 @@ resource "random_string" "suffix" {
 }
 
 locals {
-  suffix = var.unique_suffix != "" ? var.unique_suffix : random_string.suffix.result
+  # When using existing backend with explicit suffix, use that suffix for NEW Foundry resources
+  # Otherwise use provided suffix or generated random
+  suffix = var.unique_suffix != "" ? var.unique_suffix : (var.use_existing_backend ? "foundry" : random_string.suffix[0].result)
 
   # Resource naming
   resource_group_name   = var.resource_group_name != "" ? var.resource_group_name : "${var.project_name}-rg-${local.suffix}"
@@ -87,6 +107,9 @@ locals {
   # pipeline. The AI Foundry Hub requires an Application Insights resource, so
   # enabling Foundry forces it on regardless of the opt-in flag.
   enable_app_insights = var.enable_application_insights || var.create_ai_foundry_resources
+
+  # Determine whether to create backend resources
+  create_backend_resources = !var.use_existing_backend
 }
 
 # ===========================
@@ -111,10 +134,45 @@ locals {
 }
 
 # ===========================
+# Data Sources for Existing Backend Resources
+# ===========================
+
+data "azurerm_storage_account" "existing" {
+  count               = var.use_existing_backend ? 1 : 0
+  name                = var.existing_storage_account_name
+  resource_group_name = local.resource_group_name_final
+}
+
+data "azurerm_application_insights" "existing" {
+  count               = var.use_existing_backend ? 1 : 0
+  name                = var.existing_app_insights_name
+  resource_group_name = local.resource_group_name_final
+}
+
+data "azurerm_linux_function_app" "existing" {
+  count               = var.use_existing_backend ? 1 : 0
+  name                = var.existing_function_app_name
+  resource_group_name = local.resource_group_name_final
+}
+
+data "azurerm_cognitive_account" "existing_doc_intelligence" {
+  count               = var.use_existing_backend && var.existing_document_intelligence_name != "" ? 1 : 0
+  name                = var.existing_document_intelligence_name
+  resource_group_name = local.resource_group_name_final
+}
+
+data "azurerm_service_plan" "existing" {
+  count               = var.use_existing_backend && var.existing_app_service_plan_name != "" ? 1 : 0
+  name                = var.existing_app_service_plan_name
+  resource_group_name = local.resource_group_name_final
+}
+
+# ===========================
 # Storage Account
 # ===========================
 
 resource "azurerm_storage_account" "main" {
+  count                    = local.create_backend_resources ? 1 : 0
   name                     = substr(local.storage_account_name, 0, 24)
   resource_group_name      = local.resource_group_name_final
   location                 = var.location
@@ -127,10 +185,18 @@ resource "azurerm_storage_account" "main" {
   tags = local.common_tags
 }
 
+locals {
+  # Reference existing or created storage account
+  storage_account_id                = var.use_existing_backend ? data.azurerm_storage_account.existing[0].id : azurerm_storage_account.main[0].id
+  storage_account_name_final        = var.use_existing_backend ? data.azurerm_storage_account.existing[0].name : azurerm_storage_account.main[0].name
+  storage_account_primary_conn_str  = var.use_existing_backend ? data.azurerm_storage_account.existing[0].primary_connection_string : azurerm_storage_account.main[0].primary_connection_string
+  storage_account_primary_key       = var.use_existing_backend ? data.azurerm_storage_account.existing[0].primary_access_key : azurerm_storage_account.main[0].primary_access_key
+}
+
 resource "azurerm_storage_container" "main" {
-  for_each              = toset(local.containers)
+  for_each              = local.create_backend_resources ? toset(local.containers) : []
   name                  = each.value
-  storage_account_name  = azurerm_storage_account.main.name
+  storage_account_name  = azurerm_storage_account.main[0].name
   container_access_type = "private"
 }
 
@@ -139,6 +205,7 @@ resource "azurerm_storage_container" "main" {
 # ===========================
 
 resource "azurerm_cognitive_account" "doc_intelligence" {
+  count               = local.create_backend_resources ? 1 : 0
   name                = local.doc_intel_name
   resource_group_name = local.resource_group_name_final
   location            = var.location
@@ -155,7 +222,7 @@ resource "azurerm_cognitive_account" "doc_intelligence" {
 # ===========================
 
 resource "azurerm_application_insights" "main" {
-  count               = local.enable_app_insights ? 1 : 0
+  count               = local.enable_app_insights && local.create_backend_resources ? 1 : 0
   name                = local.app_insights_name
   resource_group_name = local.resource_group_name_final
   location            = var.location
@@ -164,11 +231,19 @@ resource "azurerm_application_insights" "main" {
   tags = local.common_tags
 }
 
+locals {
+  # Reference existing or created App Insights
+  app_insights_id                = var.use_existing_backend ? data.azurerm_application_insights.existing[0].id : (local.enable_app_insights ? azurerm_application_insights.main[0].id : null)
+  app_insights_connection_string = var.use_existing_backend ? data.azurerm_application_insights.existing[0].connection_string : (local.enable_app_insights ? azurerm_application_insights.main[0].connection_string : null)
+  app_insights_instrumentation_key = var.use_existing_backend ? data.azurerm_application_insights.existing[0].instrumentation_key : (local.enable_app_insights ? azurerm_application_insights.main[0].instrumentation_key : null)
+}
+
 # ===========================
 # App Service Plan (Linux)
 # ===========================
 
 resource "azurerm_service_plan" "main" {
+  count               = local.create_backend_resources ? 1 : 0
   name                = local.app_service_plan_name
   resource_group_name = local.resource_group_name_final
   location            = var.location
@@ -183,13 +258,14 @@ resource "azurerm_service_plan" "main" {
 # ===========================
 
 resource "azurerm_linux_function_app" "main" {
+  count               = local.create_backend_resources ? 1 : 0
   name                = local.function_app_name
   resource_group_name = local.resource_group_name_final
   location            = var.location
 
-  service_plan_id            = azurerm_service_plan.main.id
-  storage_account_name       = azurerm_storage_account.main.name
-  storage_account_access_key = azurerm_storage_account.main.primary_access_key
+  service_plan_id            = azurerm_service_plan.main[0].id
+  storage_account_name       = azurerm_storage_account.main[0].name
+  storage_account_access_key = azurerm_storage_account.main[0].primary_access_key
 
   site_config {
     application_stack {
@@ -209,15 +285,15 @@ resource "azurerm_linux_function_app" "main" {
   app_settings = merge(
     {
       # Platform/Deployment-Managed (auto-wired from Terraform)
-      "AzureWebJobsStorage"      = azurerm_storage_account.main.primary_connection_string
+      "AzureWebJobsStorage"      = azurerm_storage_account.main[0].primary_connection_string
       "AzureWebJobsFeatureFlags" = "EnableWorkerIndexing"
       "FUNCTIONS_WORKER_RUNTIME" = "python"
       "WEBSITE_RUN_FROM_PACKAGE" = "1"
 
       # Operator-Provided (set via terraform.tfvars)
-      "DOCUMENTINTELLIGENCE_ENDPOINT"        = azurerm_cognitive_account.doc_intelligence.endpoint
-      "DOCUMENTINTELLIGENCE_KEY"             = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence.primary_access_key
-      "STATEMENTS_STORAGE_CONNECTION_STRING" = azurerm_storage_account.main.primary_connection_string
+      "DOCUMENTINTELLIGENCE_ENDPOINT"        = azurerm_cognitive_account.doc_intelligence[0].endpoint
+      "DOCUMENTINTELLIGENCE_KEY"             = var.use_managed_identity ? "" : azurerm_cognitive_account.doc_intelligence[0].primary_access_key
+      "STATEMENTS_STORAGE_CONNECTION_STRING" = azurerm_storage_account.main[0].primary_connection_string
       "EXTRACT_ALLOWED_BINDERS"              = join(",", local.containers)
 
       # Optional Container Overrides (operator can customize)
@@ -244,12 +320,19 @@ resource "azurerm_linux_function_app" "main" {
   }
 }
 
+locals {
+  # Reference existing or created Function App
+  function_app_name_final      = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].name : azurerm_linux_function_app.main[0].name
+  function_app_default_hostname = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].default_hostname : azurerm_linux_function_app.main[0].default_hostname
+  function_app_principal_id    = var.use_existing_backend ? data.azurerm_linux_function_app.existing[0].identity[0].principal_id : azurerm_linux_function_app.main[0].identity[0].principal_id
+}
+
 # Grant Function App managed identity access to Document Intelligence
 resource "azurerm_role_assignment" "func_to_doc_intel" {
-  count                = var.use_managed_identity ? 1 : 0
-  scope                = azurerm_cognitive_account.doc_intelligence.id
+  count                = var.use_managed_identity && local.create_backend_resources ? 1 : 0
+  scope                = azurerm_cognitive_account.doc_intelligence[0].id
   role_definition_name = "Cognitive Services User"
-  principal_id         = azurerm_linux_function_app.main.identity[0].principal_id
+  principal_id         = azurerm_linux_function_app.main[0].identity[0].principal_id
 }
 
 # ===========================
@@ -307,9 +390,9 @@ resource "azapi_resource" "ai_hub" {
       description         = "AI Foundry Hub for ${var.project_name}"
       friendlyName        = "${var.project_name} AI Hub"
       kind                = "Hub"
-      storageAccount      = azurerm_storage_account.main.id
+      storageAccount      = local.storage_account_id
       keyVault            = azurerm_key_vault.foundry[0].id
-      applicationInsights = azurerm_application_insights.main[0].id
+      applicationInsights = local.app_insights_id
     }
     kind = "Hub"
   }

@@ -180,36 +180,59 @@ Creates:
 
 **Use Case:** Green-field deployment, Robin creating a new environment from scratch.
 
-### Scenario 2: Add Foundry to Existing Function RG
+### Scenario 2: Add Foundry to Existing Function RG (Foundry-Only Deployment)
 
 ```hcl
-# terraform.tfvars
-use_existing_resource_group = true
-resource_group_name         = "kiwidemo-rg-b923ue"
-create_ai_foundry_resources = true
-foundry_model_name          = "gpt-4o"
+# terraform.tfvars.foundry-existing-backend-example
+subscription_id                    = "39993ea2-aaaa-499f-af2c-990d41279d3a"
+project_name                       = "kiwidemo"
+unique_suffix                      = "fnd01"
+location                           = "australiaeast"
+use_existing_resource_group        = true
+resource_group_name                = "kiwidemo-rg-b923ue"
+use_existing_backend               = true
+existing_function_app_name         = "kiwidemo-func-b923ue"
+existing_storage_account_name      = "kiwidemosab923ue"
+existing_app_insights_name         = "kiwidemo-ai-b923ue"
+existing_document_intelligence_name = "kiwidemo-di-b923ue"
+create_ai_foundry_resources        = true
+foundry_model_name                 = "gpt-4o"
+foundry_model_version              = "2024-05-13"
+foundry_deployment_name            = "gpt-4o"
+foundry_model_capacity             = 10
 ```
 
-Creates:
-- Foundry resources in existing RG
-- Function App is already there (Terraform imports or avoids recreating)
+Creates ONLY:
+- Key Vault (kiwidemo-kv-fnd01)
+- AI Foundry Hub (kiwidemo-aihub-fnd01)
+- AI Foundry Project (kiwidemo-aiproject-fnd01)
+- Azure OpenAI Account (kiwidemo-openai-fnd01)
+- Model Deployment (gpt-4o)
 
-**Use Case:** Robin's existing demo RG `kiwidemo-rg-b923ue` with Function `kiwidemo-func-b923ue`.
+References existing (via data sources):
+- Resource Group (kiwidemo-rg-b923ue)
+- Storage Account (kiwidemosab923ue)
+- Application Insights (kiwidemo-ai-b923ue)
+- Function App (kiwidemo-func-b923ue)
+- Document Intelligence (kiwidemo-di-b923ue)
 
-**Important:** If the Function App already exists, Terraform will try to create it and fail. To avoid:
-1. Use a different `unique_suffix` so Function App name doesn't collide
-2. Or manually import existing Function App into state (advanced)
-3. Or separate the Foundry-only resources into a separate module (future enhancement)
+Does NOT create:
+- Storage Account, Storage Containers
+- Document Intelligence
+- App Service Plan
+- Function App
+- Application Insights
 
-**Recommended Approach for Existing Function:**
-Use a separate resource group for Foundry to avoid naming collisions:
+**Use Case:** Robin's existing demo RG `kiwidemo-rg-b923ue` with Function `kiwidemo-func-b923ue` already running.
 
-```hcl
-use_existing_resource_group = false  # Creates new RG for Foundry
-create_ai_foundry_resources = true
-```
+**Key Benefits:**
+- Zero destroy operations (existing resources untouched)
+- Outputs point to existing Function App URL
+- Clean separation: Foundry resources use new suffix (fnd01), backend uses existing suffix (b923ue)
+- AI Hub references existing Storage + App Insights
+- `terraform plan` shows ONLY Foundry resources to add
 
-Then manually configure the OpenAPI tool to point at the existing Function App URL.
+**Important:** The new `use_existing_backend` variable enables this Foundry-only path. Set `unique_suffix` to a NEW value (not matching existing resources) to avoid name collisions. The suffix is used ONLY for new Foundry resource names; existing backend resources are looked up via explicit variable names.
 
 ### Scenario 3: Function Only (No Foundry)
 
