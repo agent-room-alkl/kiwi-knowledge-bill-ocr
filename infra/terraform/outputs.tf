@@ -194,7 +194,7 @@ output "aiservices_account_name" {
 
 output "aiservices_account_endpoint" {
   description = "AIServices account endpoint URL (NEW Foundry shape, if created)"
-  value       = var.create_foundry_aiservices ? azapi_resource.aiservices_account[0].output.properties.endpoint : null
+  value       = var.create_foundry_aiservices ? (try(azapi_resource.aiservices_account[0].output.properties.endpoint, null) != null ? azapi_resource.aiservices_account[0].output.properties.endpoint : "https://${azapi_resource.aiservices_account[0].name}.cognitiveservices.azure.com/") : null
 }
 
 output "aiservices_project_id" {
@@ -214,5 +214,5 @@ output "aiservices_gpt4o_deployment_name" {
 
 output "aiservices_portal_url" {
   description = "Azure AI Foundry nextgen portal URL for the project (NEW Foundry shape, if created)"
-  value       = var.create_foundry_aiservices ? "https://ai.azure.com/nextgen/project/${azapi_resource.aiservices_project[0].id}" : null
+  value       = var.create_foundry_aiservices ? "https://ai.azure.com/nextgen/project${azapi_resource.aiservices_project[0].id}" : null
 }

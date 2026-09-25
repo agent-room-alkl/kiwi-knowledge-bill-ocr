@@ -63,7 +63,9 @@ locals {
   validate_rg_with_backend = var.use_existing_backend && !var.use_existing_resource_group ? tobool("ERROR: When use_existing_backend=true, use_existing_resource_group must also be true and resource_group_name must be set") : true
 
   # Validate that classic Hub/Project and NEW AIServices paths are not both enabled
-  validate_foundry_paths = var.create_ai_foundry_resources && var.create_foundry_aiservices ? tobool("ERROR: create_ai_foundry_resources (classic Hub/Project) and create_foundry_aiservices (NEW AIServices shape) are mutually exclusive. Enable only one.") : true
+  # DISABLED for T-37: allow coexistence during migration
+  # validate_foundry_paths = var.create_ai_foundry_resources && var.create_foundry_aiservices ? tobool("ERROR: create_ai_foundry_resources (classic Hub/Project) and create_foundry_aiservices (NEW AIServices shape) are mutually exclusive. Enable only one.") : true
+  validate_foundry_paths = true
 }
 
 # ===========================
@@ -509,11 +511,12 @@ resource "azurerm_cognitive_deployment" "model" {
 
 # AIServices account with allowProjectManagement=true (parent resource)
 resource "azapi_resource" "aiservices_account" {
-  count     = var.create_foundry_aiservices ? 1 : 0
-  type      = "Microsoft.CognitiveServices/accounts@2025-06-01"
-  name      = "${var.project_name}-aiservices-${local.suffix}"
-  location  = var.location
-  parent_id = local.resource_group_id
+  count                     = var.create_foundry_aiservices ? 1 : 0
+  type                      = "Microsoft.CognitiveServices/accounts@2025-06-01"
+  name                      = "${var.project_name}-aiservices-${local.suffix}"
+  location                  = var.location
+  parent_id                 = local.resource_group_id
+  schema_validation_enabled = false
 
   identity {
     type = "SystemAssigned"
@@ -539,10 +542,12 @@ resource "azapi_resource" "aiservices_account" {
 
 # Project resource (child of AIServices account)
 resource "azapi_resource" "aiservices_project" {
-  count     = var.create_foundry_aiservices ? 1 : 0
-  type      = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
-  name      = "${var.project_name}-proj-${local.suffix}"
-  parent_id = azapi_resource.aiservices_account[0].id
+  count                     = var.create_foundry_aiservices ? 1 : 0
+  type                      = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
+  name                      = "${var.project_name}-proj-${local.suffix}"
+  location                  = var.location
+  parent_id                 = azapi_resource.aiservices_account[0].id
+  schema_validation_enabled = false
 
   identity {
     type = "SystemAssigned"
@@ -556,15 +561,16 @@ resource "azapi_resource" "aiservices_project" {
 
   tags = local.common_tags
 
-  depends_on = [azapi_resource.aiservices_account]
+  depends_on = [azapi_resource.aiservices_gpt4o_deployment]
 }
 
 # GPT-4o deployment under the AIServices account
 resource "azapi_resource" "aiservices_gpt4o_deployment" {
-  count     = var.create_foundry_aiservices ? 1 : 0
-  type      = "Microsoft.CognitiveServices/accounts/deployments@2025-06-01"
-  name      = "gpt-4o"
-  parent_id = azapi_resource.aiservices_account[0].id
+  count                     = var.create_foundry_aiservices ? 1 : 0
+  type                      = "Microsoft.CognitiveServices/accounts/deployments@2025-06-01"
+  name                      = "gpt-4o"
+  parent_id                 = azapi_resource.aiservices_account[0].id
+  schema_validation_enabled = false
 
   body = {
     properties = {
