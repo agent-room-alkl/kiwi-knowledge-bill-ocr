@@ -24,13 +24,17 @@
     - configure-foundry: Run post-deployment Foundry configuration helper
     - outputs: Show Terraform outputs
     - destroy: Destroy all resources (USE WITH EXTREME CAUTION)
-    - all: One-click orchestration — runs init/validate/plan, then apply/deploy-functions/generate-openapi/outputs with a yes/no confirmation gate before each state-changing step (use -AutoApprove for fully unattended)
+    - all: One-click orchestration - runs init/validate/plan, then apply/deploy-functions/generate-openapi/outputs with a yes/no confirmation gate before each state-changing step (use -AutoApprove for fully unattended)
 
 .PARAMETER VarFile
     Path to terraform.tfvars file (default: terraform.tfvars)
 
 .PARAMETER AutoApprove
     Skip interactive approval for apply/destroy (USE WITH CAUTION)
+
+.PARAMETER AllowDestroy
+    Only meaningful with -Action all. Explicitly permit a plan that deletes/replaces resources.
+    Without it, -Action all aborts on any planned destroy (and refuses outright under -AutoApprove).
 
 .EXAMPLE
     .\deploy.ps1 -Action init
@@ -60,7 +64,10 @@ param(
     [string]$VarFile = "terraform.tfvars",
 
     [Parameter(Mandatory=$false)]
-    [switch]$AutoApprove
+    [switch]$AutoApprove,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$AllowDestroy
 )
 
 # Set error action preference
@@ -199,6 +206,37 @@ function Invoke-TerraformPlan {
     }
     Write-Success "Terraform plan generated: tfplan"
     Write-Warning "Review the plan above before running -Action apply"
+}
+
+# Inspect the saved plan for resources that will be deleted or replaced.
+# Returns an array of resource addresses whose planned actions include 'delete'
+# (a replacement shows both 'delete' and 'create', so this covers replacements too).
+function Get-PlanDestroyAddresses {
+    if (-not (Test-Path "tfplan")) {
+        return @()
+    }
+
+    $planJsonRaw = terraform show -json tfplan
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($planJsonRaw)) {
+        Write-Error-Custom "Failed to read plan JSON (terraform show -json tfplan)"
+        exit 1
+    }
+
+    try {
+        $plan = $planJsonRaw | ConvertFrom-Json
+    }
+    catch {
+        Write-Error-Custom "Failed to parse plan JSON: $_"
+        exit 1
+    }
+
+    $addresses = @()
+    foreach ($rc in $plan.resource_changes) {
+        if ($rc.change.actions -contains 'delete') {
+            $addresses += $rc.address
+        }
+    }
+    return ,$addresses
 }
 
 # Terraform apply
@@ -406,10 +444,37 @@ function Invoke-All {
     Invoke-TerraformValidate
     Invoke-TerraformPlan
 
-    # 4. Gate: apply (creates billable resources)
+    # 4. Destroy guard: the plan must not delete/replace resources unless explicitly allowed.
+    $destroyAddresses = Get-PlanDestroyAddresses
+    if ($destroyAddresses.Count -gt 0) {
+        Write-Error-Custom "This plan will DELETE or REPLACE $($destroyAddresses.Count) resource(s):"
+        foreach ($addr in $destroyAddresses) {
+            Write-Host "  - $addr" -ForegroundColor Red
+        }
+        if ($AutoApprove -and -not $AllowDestroy) {
+            Write-Error-Custom "Refusing to apply a plan with destroys under -AutoApprove. Re-run with -AllowDestroy to explicitly permit these deletions."
+            exit 1
+        }
+        if (-not $AllowDestroy) {
+            $destroyConfirm = Read-Host "These resources will be DESTROYED. Type 'DESTROY' to proceed, anything else to abort"
+            if ($destroyConfirm -ne 'DESTROY') {
+                Write-Info "Aborted before apply due to planned destroys. No changes were applied."
+                return
+            }
+        }
+        else {
+            Write-Warning "-AllowDestroy is set: proceeding with the deletions listed above."
+        }
+    }
+    else {
+        Write-Success "Destroy check: plan contains 0 resources to delete/replace."
+    }
+
+    # 5. Gate: apply (creates billable resources)
     $doApply = $AutoApprove
     if (-not $AutoApprove) {
-        Write-Warning "Review the plan above. Confirm it shows the expected resources and '0 to destroy'."
+        Write-Warning "Target subscription: $env:ARM_SUBSCRIPTION_ID"
+        Write-Warning "Review the plan above and confirm it targets the correct subscription."
         $ans = Read-Host "Apply this plan now? This CREATES billable Azure resources. Type 'yes' to apply, anything else to stop"
         $doApply = ($ans -eq 'yes')
     }
