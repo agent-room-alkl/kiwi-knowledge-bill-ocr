@@ -30,3 +30,21 @@ from vikas/
 
 # Personal notes and analysis files with real human names / applicant PII must not be committed.
 VIKAS-ATTACHMENTS-ANALYSIS.md
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Generated OpenAPI specs (environment-specific)
+foundry/openapi-servicing-*.json
+!foundry/openapi-servicing.json
