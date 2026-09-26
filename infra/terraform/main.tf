@@ -500,7 +500,7 @@ resource "azurerm_cognitive_deployment" "model" {
 # - Deployments: Microsoft.CognitiveServices/accounts/deployments (under AIServices account)
 #
 # This shape is DIFFERENT from the classic Hub/Project path above (MachineLearningServices workspaces).
-# Use create_foundry_aiservices=true to enable this path (default: false, no resources created).
+# Use create_foundry_aiservices=true to enable this path (default: true).
 #
 # IMPORTANT: `kind` must be at the TOP LEVEL of the azapi body, NOT inside body.properties.
 # Placing `kind` inside properties causes azapi schema validation failures.

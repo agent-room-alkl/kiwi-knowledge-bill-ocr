@@ -238,7 +238,7 @@ foundry_model_capacity      = 10
 - ⚠️ OpenAPI tool attachment is **NOT** supported via Terraform
 - ⚠️ These must be configured manually in the Azure AI Portal
 
-Leave `create_ai_foundry_resources = false` (default) to set up Foundry completely manually.
+Set `create_ai_foundry_resources = false` and `create_foundry_aiservices = false` to set up Foundry completely manually (both default to true).
 
 ### Remote State Configuration
 
