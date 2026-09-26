@@ -24,6 +24,7 @@
     - configure-foundry: Run post-deployment Foundry configuration helper
     - outputs: Show Terraform outputs
     - destroy: Destroy all resources (USE WITH EXTREME CAUTION)
+    - all: One-click orchestration — runs init/validate/plan, then apply/deploy-functions/generate-openapi/outputs with a yes/no confirmation gate before each state-changing step (use -AutoApprove for fully unattended)
 
 .PARAMETER VarFile
     Path to terraform.tfvars file (default: terraform.tfvars)
@@ -40,6 +41,8 @@
     .\deploy.ps1 -Action generate-openapi
     .\deploy.ps1 -Action configure-foundry
     .\deploy.ps1 -Action outputs
+    .\deploy.ps1 -Action all
+    .\deploy.ps1 -Action all -AutoApprove
 
 .NOTES
     Author: Cursor Agent (Agent Room Task T-19)
@@ -50,7 +53,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('init', 'validate', 'fmt', 'plan', 'apply', 'deploy-functions', 'generate-openapi', 'configure-foundry', 'outputs', 'destroy')]
+    [ValidateSet('init', 'validate', 'fmt', 'plan', 'apply', 'deploy-functions', 'generate-openapi', 'configure-foundry', 'outputs', 'destroy', 'all')]
     [string]$Action,
 
     [Parameter(Mandatory=$false)]
@@ -124,8 +127,8 @@ function Test-Prerequisites {
         exit 1
     }
 
-    # Check Functions Core Tools (only for deploy-functions action)
-    if ($Action -eq 'deploy-functions') {
+    # Check Functions Core Tools (for deploy-functions and the all-in-one orchestration)
+    if ($Action -eq 'deploy-functions' -or $Action -eq 'all') {
         try {
             $funcVersion = func --version
             Write-Success "Azure Functions Core Tools $funcVersion found"
@@ -200,6 +203,8 @@ function Invoke-TerraformPlan {
 
 # Terraform apply
 function Invoke-TerraformApply {
+    param([switch]$SkipConfirm)
+
     Write-Warning "============================================"
     Write-Warning "CAUTION: This will create Azure resources"
     Write-Warning "DO NOT run against production subscriptions"
@@ -210,7 +215,7 @@ function Invoke-TerraformApply {
         exit 1
     }
 
-    if (-not $AutoApprove) {
+    if (-not $AutoApprove -and -not $SkipConfirm) {
         $confirm = Read-Host "Type 'yes' to apply the plan"
         if ($confirm -ne 'yes') {
             Write-Info "Apply cancelled"
@@ -386,6 +391,67 @@ function Invoke-TerraformDestroy {
     Write-Success "All resources destroyed"
 }
 
+# One-click orchestration: run the whole pipeline with confirmation gates
+function Invoke-All {
+    Write-Info "============================================"
+    Write-Info "ONE-CLICK ORCHESTRATION (-Action all)"
+    Write-Info "Sequence: init -> validate -> plan -> [confirm] apply -> [confirm] deploy-functions -> [confirm] generate-openapi -> outputs"
+    if ($AutoApprove) {
+        Write-Warning "-AutoApprove is set: all confirmation gates are SKIPPED (fully unattended). This WILL create billable Azure resources."
+    }
+    Write-Info "============================================"
+
+    # 1-3. Always-safe steps (no resources created)
+    Invoke-TerraformInit
+    Invoke-TerraformValidate
+    Invoke-TerraformPlan
+
+    # 4. Gate: apply (creates billable resources)
+    $doApply = $AutoApprove
+    if (-not $AutoApprove) {
+        Write-Warning "Review the plan above. Confirm it shows the expected resources and '0 to destroy'."
+        $ans = Read-Host "Apply this plan now? This CREATES billable Azure resources. Type 'yes' to apply, anything else to stop"
+        $doApply = ($ans -eq 'yes')
+    }
+    if (-not $doApply) {
+        Write-Info "Stopped before apply. No resources were created. Re-run '-Action all' (or '-Action apply') when ready."
+        return
+    }
+    Invoke-TerraformApply -SkipConfirm
+
+    # 5. Gate: deploy Function App code
+    $doFunctions = $AutoApprove
+    if (-not $AutoApprove) {
+        $ans = Read-Host "Deploy Function App code now? Type 'yes' to deploy, anything else to skip"
+        $doFunctions = ($ans -eq 'yes')
+    }
+    if ($doFunctions) {
+        Invoke-DeployFunctions
+    }
+    else {
+        Write-Warning "Skipped function deployment. Run '-Action deploy-functions' later when ready."
+    }
+
+    # 6. Gate: generate OpenAPI spec with the deployed Function URL
+    $doOpenApi = $AutoApprove
+    if (-not $AutoApprove) {
+        $ans = Read-Host "Generate OpenAPI spec with the Function URL now? Type 'yes' to generate, anything else to skip"
+        $doOpenApi = ($ans -eq 'yes')
+    }
+    if ($doOpenApi) {
+        Invoke-GenerateOpenAPI
+    }
+    else {
+        Write-Warning "Skipped OpenAPI generation. Run '-Action generate-openapi' later when ready."
+    }
+
+    # 7. Show outputs
+    Show-Outputs
+
+    Write-Success "One-click orchestration finished."
+    Write-Info "Reminder: the Foundry agent + OpenAPI tool wiring is a manual step in https://ai.azure.com (cannot be automated by Terraform)."
+}
+
 # Main execution
 Write-Info "Kiwi Knowledge Bill OCR - Terraform Deployment Script"
 Write-Info "Action: $Action"
@@ -430,6 +496,9 @@ switch ($Action) {
     }
     'destroy' {
         Invoke-TerraformDestroy
+    }
+    'all' {
+        Invoke-All
     }
 }
 
