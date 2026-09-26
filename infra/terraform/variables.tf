@@ -203,16 +203,16 @@ variable "enable_application_insights" {
 # ===========================
 
 variable "create_ai_foundry_resources" {
-  description = "Create AI Foundry Hub, Project, and Azure OpenAI resources (preview feature - CLASSIC Hub/Project shape)"
+  description = "Create AI Foundry supporting resources (Key Vault, App Insights, optional classic OpenAI). Default true so one-click deploy creates Foundry. Pair with create_foundry_aiservices for the nextgen portal project. Use create_classic_foundry_hub=false to skip the classic Hub/Project that does not appear in ai.azure.com/nextgen."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "create_classic_foundry_hub" {
-  description = "Create ONLY the classic AI Foundry Hub + Project (MachineLearningServices workspaces). null (default) = follow create_ai_foundry_resources. Set false to remove the classic Hub/Project while keeping Key Vault, App Insights and the Azure OpenAI account/deployment."
+  description = "Create ONLY the classic AI Foundry Hub + Project (MachineLearningServices workspaces). null = follow create_ai_foundry_resources. Default false: skip classic Hub/Project (not visible in the new Foundry portal) while create_ai_foundry_resources can still create Key Vault / App Insights / OpenAI."
   type        = bool
   nullable    = true
-  default     = null
+  default     = false
 }
 
 variable "foundry_model_name" {
@@ -244,9 +244,9 @@ variable "foundry_model_capacity" {
 # ===========================
 
 variable "create_foundry_aiservices" {
-  description = "Create NEW Microsoft Foundry shape: AIServices account with allowProjectManagement=true + child project resource (appears in ai.azure.com/nextgen portal). Mutually exclusive with classic Hub/Project path."
+  description = "Create NEW Microsoft Foundry shape: AIServices account with allowProjectManagement=true + child project + gpt-4o (appears in ai.azure.com/nextgen and Azure Foundry list). Default true so -Action all creates a visible Foundry project."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "foundry_aiservices_sku" {
