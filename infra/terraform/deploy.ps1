@@ -288,18 +288,20 @@ function Invoke-DeployFunctions {
 
     Write-Info "Function App name: $funcAppName"
 
-    # Check if function_app directory exists
-    $functionAppPath = "../../function_app"
+    # Resolve from this script, not the caller's cwd. local.settings.json is gitignored,
+    # so Core Tools cannot infer language - always pass --python.
+    $functionAppPath = Join-Path $PSScriptRoot "..\..\function_app"
     if (-not (Test-Path $functionAppPath)) {
         Write-Error-Custom "Function app directory not found: $functionAppPath"
         exit 1
     }
+    $functionAppPath = (Resolve-Path $functionAppPath).Path
 
     # Deploy
     Push-Location $functionAppPath
     try {
-        Write-Info "Publishing functions to $funcAppName..."
-        func azure functionapp publish $funcAppName
+        Write-Info "Publishing functions to $funcAppName from $functionAppPath..."
+        func azure functionapp publish $funcAppName --python
         if ($LASTEXITCODE -ne 0) {
             Write-Error-Custom "Function deployment failed"
             exit $LASTEXITCODE
