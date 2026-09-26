@@ -24,12 +24,17 @@
     - configure-foundry: Run post-deployment Foundry configuration helper
     - outputs: Show Terraform outputs
     - destroy: Destroy all resources (USE WITH EXTREME CAUTION)
+    - all: One-click orchestration - runs init/validate/plan, then apply/deploy-functions/generate-openapi/outputs with a yes/no confirmation gate before each state-changing step (use -AutoApprove for fully unattended)
 
 .PARAMETER VarFile
     Path to terraform.tfvars file (default: terraform.tfvars)
 
 .PARAMETER AutoApprove
     Skip interactive approval for apply/destroy (USE WITH CAUTION)
+
+.PARAMETER AllowDestroy
+    Only meaningful with -Action all. Explicitly permit a plan that deletes/replaces resources.
+    Without it, -Action all aborts on any planned destroy (and refuses outright under -AutoApprove).
 
 .EXAMPLE
     .\deploy.ps1 -Action init
@@ -40,6 +45,8 @@
     .\deploy.ps1 -Action generate-openapi
     .\deploy.ps1 -Action configure-foundry
     .\deploy.ps1 -Action outputs
+    .\deploy.ps1 -Action all
+    .\deploy.ps1 -Action all -AutoApprove
 
 .NOTES
     Author: Cursor Agent (Agent Room Task T-19)
@@ -50,14 +57,17 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet('init', 'validate', 'fmt', 'plan', 'apply', 'deploy-functions', 'generate-openapi', 'configure-foundry', 'outputs', 'destroy')]
+    [ValidateSet('init', 'validate', 'fmt', 'plan', 'apply', 'deploy-functions', 'generate-openapi', 'configure-foundry', 'outputs', 'destroy', 'all')]
     [string]$Action,
 
     [Parameter(Mandatory=$false)]
     [string]$VarFile = "terraform.tfvars",
 
     [Parameter(Mandatory=$false)]
-    [switch]$AutoApprove
+    [switch]$AutoApprove,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$AllowDestroy
 )
 
 # Set error action preference
@@ -124,8 +134,8 @@ function Test-Prerequisites {
         exit 1
     }
 
-    # Check Functions Core Tools (only for deploy-functions action)
-    if ($Action -eq 'deploy-functions') {
+    # Check Functions Core Tools (for deploy-functions and the all-in-one orchestration)
+    if ($Action -eq 'deploy-functions' -or $Action -eq 'all') {
         try {
             $funcVersion = func --version
             Write-Success "Azure Functions Core Tools $funcVersion found"
@@ -198,8 +208,41 @@ function Invoke-TerraformPlan {
     Write-Warning "Review the plan above before running -Action apply"
 }
 
+# Inspect the saved plan for resources that will be deleted or replaced.
+# Returns an array of resource addresses whose planned actions include 'delete'
+# (a replacement shows both 'delete' and 'create', so this covers replacements too).
+function Get-PlanDestroyAddresses {
+    if (-not (Test-Path "tfplan")) {
+        return @()
+    }
+
+    $planJsonRaw = terraform show -json tfplan
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($planJsonRaw)) {
+        Write-Error-Custom "Failed to read plan JSON (terraform show -json tfplan)"
+        exit 1
+    }
+
+    try {
+        $plan = $planJsonRaw | ConvertFrom-Json
+    }
+    catch {
+        Write-Error-Custom "Failed to parse plan JSON: $_"
+        exit 1
+    }
+
+    $addresses = @()
+    foreach ($rc in $plan.resource_changes) {
+        if ($rc.change.actions -contains 'delete') {
+            $addresses += $rc.address
+        }
+    }
+    return ,$addresses
+}
+
 # Terraform apply
 function Invoke-TerraformApply {
+    param([switch]$SkipConfirm)
+
     Write-Warning "============================================"
     Write-Warning "CAUTION: This will create Azure resources"
     Write-Warning "DO NOT run against production subscriptions"
@@ -210,7 +253,7 @@ function Invoke-TerraformApply {
         exit 1
     }
 
-    if (-not $AutoApprove) {
+    if (-not $AutoApprove -and -not $SkipConfirm) {
         $confirm = Read-Host "Type 'yes' to apply the plan"
         if ($confirm -ne 'yes') {
             Write-Info "Apply cancelled"
@@ -386,6 +429,94 @@ function Invoke-TerraformDestroy {
     Write-Success "All resources destroyed"
 }
 
+# One-click orchestration: run the whole pipeline with confirmation gates
+function Invoke-All {
+    Write-Info "============================================"
+    Write-Info "ONE-CLICK ORCHESTRATION (-Action all)"
+    Write-Info "Sequence: init -> validate -> plan -> [confirm] apply -> [confirm] deploy-functions -> [confirm] generate-openapi -> outputs"
+    if ($AutoApprove) {
+        Write-Warning "-AutoApprove is set: all confirmation gates are SKIPPED (fully unattended). This WILL create billable Azure resources."
+    }
+    Write-Info "============================================"
+
+    # 1-3. Always-safe steps (no resources created)
+    Invoke-TerraformInit
+    Invoke-TerraformValidate
+    Invoke-TerraformPlan
+
+    # 4. Destroy guard: the plan must not delete/replace resources unless explicitly allowed.
+    $destroyAddresses = Get-PlanDestroyAddresses
+    if ($destroyAddresses.Count -gt 0) {
+        Write-Error-Custom "This plan will DELETE or REPLACE $($destroyAddresses.Count) resource(s):"
+        foreach ($addr in $destroyAddresses) {
+            Write-Host "  - $addr" -ForegroundColor Red
+        }
+        if ($AutoApprove -and -not $AllowDestroy) {
+            Write-Error-Custom "Refusing to apply a plan with destroys under -AutoApprove. Re-run with -AllowDestroy to explicitly permit these deletions."
+            exit 1
+        }
+        if (-not $AllowDestroy) {
+            $destroyConfirm = Read-Host "These resources will be DESTROYED. Type 'DESTROY' to proceed, anything else to abort"
+            if ($destroyConfirm -ne 'DESTROY') {
+                Write-Info "Aborted before apply due to planned destroys. No changes were applied."
+                return
+            }
+        }
+        else {
+            Write-Warning "-AllowDestroy is set: proceeding with the deletions listed above."
+        }
+    }
+    else {
+        Write-Success "Destroy check: plan contains 0 resources to delete/replace."
+    }
+
+    # 5. Gate: apply (creates billable resources)
+    $doApply = $AutoApprove
+    if (-not $AutoApprove) {
+        Write-Warning "Target subscription: $env:ARM_SUBSCRIPTION_ID"
+        Write-Warning "Review the plan above and confirm it targets the correct subscription."
+        $ans = Read-Host "Apply this plan now? This CREATES billable Azure resources. Type 'yes' to apply, anything else to stop"
+        $doApply = ($ans -eq 'yes')
+    }
+    if (-not $doApply) {
+        Write-Info "Stopped before apply. No resources were created. Re-run '-Action all' (or '-Action apply') when ready."
+        return
+    }
+    Invoke-TerraformApply -SkipConfirm
+
+    # 5. Gate: deploy Function App code
+    $doFunctions = $AutoApprove
+    if (-not $AutoApprove) {
+        $ans = Read-Host "Deploy Function App code now? Type 'yes' to deploy, anything else to skip"
+        $doFunctions = ($ans -eq 'yes')
+    }
+    if ($doFunctions) {
+        Invoke-DeployFunctions
+    }
+    else {
+        Write-Warning "Skipped function deployment. Run '-Action deploy-functions' later when ready."
+    }
+
+    # 6. Gate: generate OpenAPI spec with the deployed Function URL
+    $doOpenApi = $AutoApprove
+    if (-not $AutoApprove) {
+        $ans = Read-Host "Generate OpenAPI spec with the Function URL now? Type 'yes' to generate, anything else to skip"
+        $doOpenApi = ($ans -eq 'yes')
+    }
+    if ($doOpenApi) {
+        Invoke-GenerateOpenAPI
+    }
+    else {
+        Write-Warning "Skipped OpenAPI generation. Run '-Action generate-openapi' later when ready."
+    }
+
+    # 7. Show outputs
+    Show-Outputs
+
+    Write-Success "One-click orchestration finished."
+    Write-Info "Reminder: the Foundry agent + OpenAPI tool wiring is a manual step in https://ai.azure.com (cannot be automated by Terraform)."
+}
+
 # Main execution
 Write-Info "Kiwi Knowledge Bill OCR - Terraform Deployment Script"
 Write-Info "Action: $Action"
@@ -430,6 +561,9 @@ switch ($Action) {
     }
     'destroy' {
         Invoke-TerraformDestroy
+    }
+    'all' {
+        Invoke-All
     }
 }
 
