@@ -269,8 +269,12 @@ and what is still unresolved.
   a correct run every time. Report the count in the six-line summary. Never
   treat C9 as SELFCHECK_FAILED — like C10, it describes a file that needs
   review, not a file that cannot be rendered
-- C10 >15% unclear → WARN only, still render. Report the count in the
-  six-line summary. Do not treat C10 as SELFCHECK_FAILED.
+- C10 Before render, repair every unclear row that names a school, a company,
+  a payment processor, or a brand already classified elsewhere in this file.
+  Unclear is only for a descriptor that names nothing (truncated shop, bare
+  PayPal reference, conversion line with no merchant). After that repair, if
+  unclear is still >15%, WARN and still render, and report the count. Do not
+  treat C10 as SELFCHECK_FAILED.
 - C11 `part4` field absent (empty array OK only with no-liability status)
 - C12 applicant fields not from extractor and not `Not provided in binder`
 - C13 accepted statement missing from account/document index, or label is
