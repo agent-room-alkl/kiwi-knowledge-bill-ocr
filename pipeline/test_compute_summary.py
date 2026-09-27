@@ -1345,9 +1345,12 @@ def test_model_unclear_still_names_a_school_or_processor():
     A truncated shop with no brand stays unclear.
     """
     txns = [
-        _txn("sch", "2026-07-14", "WESTLAKE GIRLS HIGH SCHNORTH SHORE", 70, "outflow", "WESTLAKE GIRLS HIGH SCH"),
+        _txn("sch", "2026-07-14", "WESTLAKE GIRLS HIGH SCHNORTH SHORE", 70, "outflow", "WESTLAKE GIRLS HIGH SCHNORTH SHORE"),
         _txn("gc", "2026-05-20", "Direct Debit -GOCARDLESS LTD", 12.5, "outflow", "GOCARDLESS LTD"),
         _txn("fine", "2026-06-05", "AT INFRINGEMENTS AUCKLAND", 150, "outflow", "AT INFRINGEMENTS"),
+        _txn("park", "2026-07-06", "SMARTPARKINGBREACHNOTICAUCKLA ND", 97.85, "outflow", "SMARTPARKINGBREACHNOTIC"),
+        _txn("ikea", "2026-07-20", "IKEA 483561 ****** 7996", 32.99, "outflow", "IKEA 483561"),
+        _txn("ikea_r", "2026-07-21", "IKEA RESTAUR", 18, "outflow", "IKEA RESTAUR"),
         _txn("shop", "2026-05-23", "POS W/D DE HE TANG CH-12:44", 63, "outflow", "DE HE TANG CH"),
     ]
     cls = [_cls(t["transaction_id"], "unclear", False) for t in txns]
@@ -1362,6 +1365,9 @@ def test_model_unclear_still_names_a_school_or_processor():
     assert by_id["gc"]["category"] == "monthly_subscriptions"
     assert by_id["gc"]["include"] == "No"
     assert by_id["fine"]["category"] == "transport"
+    assert by_id["park"]["category"] == "transport"
+    assert by_id["ikea"]["category"] == "food_grocery_clothing_personal_care"
+    assert by_id["ikea_r"]["category"] == "recreation_entertainment"
     assert by_id["shop"]["category"] == "unclear"
 
 
