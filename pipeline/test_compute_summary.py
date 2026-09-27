@@ -1339,6 +1339,32 @@ def test_person_name_outflow_is_internal_transfer_even_when_model_says_unclear()
     assert by_id["rent"]["include"] == "Yes"
 
 
+def test_model_unclear_still_names_a_school_or_processor():
+    """A model 'unclear' does not keep a school or a named processor unknown.
+
+    A truncated shop with no brand stays unclear.
+    """
+    txns = [
+        _txn("sch", "2026-07-14", "WESTLAKE GIRLS HIGH SCHNORTH SHORE", 70, "outflow", "WESTLAKE GIRLS HIGH SCH"),
+        _txn("gc", "2026-05-20", "Direct Debit -GOCARDLESS LTD", 12.5, "outflow", "GOCARDLESS LTD"),
+        _txn("fine", "2026-06-05", "AT INFRINGEMENTS AUCKLAND", 150, "outflow", "AT INFRINGEMENTS"),
+        _txn("shop", "2026-05-23", "POS W/D DE HE TANG CH-12:44", 63, "outflow", "DE HE TANG CH"),
+    ]
+    cls = [_cls(t["transaction_id"], "unclear", False) for t in txns]
+    out = compute_summary(
+        {"assessment_date": "2026-09-02", "accounts": [
+            {"account_id": "a1", "period_start": "2026-05-01", "period_end": "2026-07-31"}
+        ], "transactions": txns},
+        {"assessment_date": "2026-09-02", "classifications": cls, "use_merchant_memory": False},
+    )
+    by_id = {r["transaction_id"]: r for r in out["part2"]}
+    assert by_id["sch"]["category"] == "education"
+    assert by_id["gc"]["category"] == "monthly_subscriptions"
+    assert by_id["gc"]["include"] == "No"
+    assert by_id["fine"]["category"] == "transport"
+    assert by_id["shop"]["category"] == "unclear"
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1382,6 +1408,7 @@ if __name__ == "__main__":
         test_different_people_are_not_merged_by_the_join_key,
         test_the_wider_join_key_moves_no_money,
         test_person_name_outflow_is_internal_transfer_even_when_model_says_unclear,
+        test_model_unclear_still_names_a_school_or_processor,
     ]
     for fn in tests:
         fn()

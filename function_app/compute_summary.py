@@ -648,6 +648,50 @@ def memory_classification(
     return None
 
 
+# Applied only when the model already said unclear. A real category the model
+# chose is left alone. These are the rows a lender can name without guessing:
+# a school, a payment processor, or a fine. A truncated shop stays unclear.
+_SCHOOL_UNCLEAR_RE = re.compile(
+    r"\b(?:HIGH\s+SCH|INTERMEDIATE|SCHOOL|COLLEGE|KINDERGARTEN)\b|GREENHILL\s+INTER",
+    re.I,
+)
+_TRADE_UNCLEAR_RE = re.compile(
+    r"\b(?:GOCARDLESS|GOOGLE\s*ADS|IWG|GITHUB|UPWORK|FREELANCER|ANTHROPIC|CLAUDE)\b",
+    re.I,
+)
+_TRANSPORT_UNCLEAR_RE = re.compile(
+    r"\b(?:INFRINGEMENTS?|AUCKLAND\s+TRANSPORT|SMARTPARKING)\b",
+    re.I,
+)
+
+
+def obvious_unclear_classification(txn: dict[str, Any]) -> dict[str, Any] | None:
+    """A category for an obvious school, processor, or fine, or None."""
+    text = f"{txn.get('description') or ''} {txn.get('merchant_normalized') or ''}"
+    if _SCHOOL_UNCLEAR_RE.search(text):
+        return {
+            "category": "education",
+            "include_in_living_expenses": True,
+            "is_business": "no",
+            "reason": "school payment, not unclear",
+        }
+    if _TRADE_UNCLEAR_RE.search(text):
+        return {
+            "category": "monthly_subscriptions",
+            "include_in_living_expenses": False,
+            "is_business": "yes",
+            "reason": "known trade processor or software, not unclear",
+        }
+    if _TRANSPORT_UNCLEAR_RE.search(text):
+        return {
+            "category": "transport",
+            "include_in_living_expenses": True,
+            "is_business": "no",
+            "reason": "transport charge or infringement, not unclear",
+        }
+    return None
+
+
 def payer_classification(txn: dict[str, Any]) -> dict[str, Any] | None:
     """Side-business takings for an inflow under a person's name, or None.
 
@@ -1075,6 +1119,23 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             reason = "join miss - no classification for this transaction"
         elif category == "unclear" and not reason:
             reason = "model low confidence / ambiguous"
+        # The model saying unclear is not the last word. A remembered brand,
+        # a school, or a named processor is classified. A truncated shop is not.
+        if category == "unclear" and direction in {"inflow", "outflow"}:
+            remembered = memory_classification(txn, memory) if memory else None
+            repaired = None if remembered and (remembered.get("category") or "") != "unclear" else obvious_unclear_classification(txn)
+            chosen = remembered if remembered and (remembered.get("category") or "") != "unclear" else repaired
+            if chosen:
+                category = chosen["category"]
+                include = effective_include(
+                    category, direction, bool(chosen.get("include_in_living_expenses"))
+                )
+                business_flag = _business_flag(chosen.get("is_business"))
+                if business_flag == "yes":
+                    include = False
+                classified = True
+                source = "memory" if chosen is remembered else "pattern"
+                reason = str(chosen.get("reason") or reason)
         # Person-name outflows are internal transfers, including when the model
         # left them unclear or called them grocery. Rent the model already
         # named stays rent: `RENT A. LANDLORD` is a person and a living expense.
