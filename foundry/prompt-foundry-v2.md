@@ -207,8 +207,9 @@ If `status` is `not_published`, report that; do not claim delivery.
 Any FAIL → do not render.
 
 **C8 is repairable, and repairing it is your job, not the reader's.**
-Classify the inflows it names and call `compute_summary` again, once. Then
-continue.
+Classify the employer payroll it names and call `compute_summary` again, once.
+If that call still shows assessable income of 0 only because the salary row
+is one-off, stop repairing and render (see C8). Otherwise continue.
 
 **C9 does not stop the render.** Unclassified rows are reported, not fatal:
 the engine already shows them as `unclear` with reason `no classification
@@ -221,7 +222,9 @@ with a reason is a valid answer, a guess is not) and call `compute_summary`
 again with **`merge_classifications: true`** and **only the entries you just
 worked out**. The server keeps what you sent before and merges; resending the
 whole set is what exhausts your context window. `classification_store` in the
-response tells you what it now holds.
+response tells you what it now holds. `added` counts new merchants only. A
+merchant you send again is `replaced` (last write wins). `added == 0` with
+`replaced > 0` means the server kept the correction. `total` is how many it holds.
 
 **`audit.unclassified_merchants` is the list to work from.** The response no
 longer carries `part2` - the full ledger is too big for the tool channel, so
@@ -242,8 +245,10 @@ how many rows, and that they are excluded from every total. Stopping at C9
 with a list and no workbook is a refusal to finish the work.
 
 Report `SELFCHECK_FAILED` with the C-numbers when a check is not repairable,
-or when three repair passes have not cleared C8/C9 — then say what you tried
-and what is still unresolved.
+or when three repair passes have not cleared a C8 whose inflows are still
+unclassified. A C8 that is only a one-off salary (monthly equivalent 0) is a
+WARN, not a failure. C9 never blocks the render. Say what you tried and what
+is still unresolved.
 
 - C1 `part2` empty, or length ≠ non-info canonical transactions
 - C2 every Part 1 `monthly_equivalent` is 0, or recommended living is 0
@@ -256,12 +261,19 @@ and what is still unresolved.
   total includes side-business turnover, which is not assessable income
 - C6 rent exists in part2 but Part 1 Rent is 0
 - C7 POSREJ/DECLINED/REVERSED/NSF/DISHONOUR still has a non-zero amount
-- C8 no *assessable* income while part2 has inflows → go back to step 2,
-  classify inflows, re-run compute — do not render. Ignore income rows of
-  type `side_business_gross_not_assessable` when judging empty: that row is
-  gross turnover the engine reports for visibility, and a binder whose
-  salary went unclassified would otherwise pass C8 on turnover alone.
-  `audit.assessable_income_monthly == 0` is the check
+- C8 `audit.assessable_income_monthly == 0` while inflows exist. Ignore
+  income rows of type `side_business_gross_not_assessable`: that row is gross
+  turnover, and a binder whose salary went unclassified would otherwise pass
+  C8 on turnover alone. `reimbursement`, `internal_transfer`, and
+  `business_receipts` do not clear C8. If no income row has an assessable
+  type (`salary_wages`, `benefit`, `child_support_received`, `rental_income`,
+  `investment_income`, `other_income`, `income_credit`), go back to step 2,
+  classify the employer payroll with the merchant string exactly as the
+  worklist spells it, and re-run compute — do not render. If an assessable
+  income row exists and its `monthly_equivalent` is 0 because the receipt is
+  one-off (the basis says it is listed, not counted as recurring), WARN and
+  still render. Say that receipt is on the income list and is not a monthly
+  amount. Do not treat that as SELFCHECK_FAILED.
 - C9 `audit.join_miss_rows` > 0 → WARN, one repair pass, then still render.
   Do NOT compare the length of `classifications` against the transaction
   count: one merchant entry covers every row of that merchant, so 238

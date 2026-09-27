@@ -650,9 +650,12 @@ def memory_classification(
 
 # Applied only when the model already said unclear. A real category the model
 # chose is left alone. These are the rows a lender can name without guessing:
-# a school, a payment processor, or a fine. A truncated shop stays unclear.
+# a school, a payment processor, a fine, or IKEA. A truncated shop stays unclear.
+# Statements glue the next word on: "HIGH SCHNORTH", "SMARTPARKINGBREACH".
+# Those have no word boundary after SCH or SMARTPARKING, so the token is
+# matched without requiring one.
 _SCHOOL_UNCLEAR_RE = re.compile(
-    r"\b(?:HIGH\s+SCH|INTERMEDIATE|SCHOOL|COLLEGE|KINDERGARTEN)\b|GREENHILL\s+INTER",
+    r"\b(?:HIGH\s+SCH|INTERMEDIATE|SCHOOL|COLLEGE|KINDERGARTEN)|GREENHILL\s+INTER",
     re.I,
 )
 _TRADE_UNCLEAR_RE = re.compile(
@@ -660,9 +663,10 @@ _TRADE_UNCLEAR_RE = re.compile(
     re.I,
 )
 _TRANSPORT_UNCLEAR_RE = re.compile(
-    r"\b(?:INFRINGEMENTS?|AUCKLAND\s+TRANSPORT|SMARTPARKING)\b",
+    r"\b(?:INFRINGEMENTS?|AUCKLAND\s+TRANSPORT)\b|\bSMARTPARKING",
     re.I,
 )
+_IKEA_RE = re.compile(r"\bIKEA\b", re.I)
 
 
 def obvious_unclear_classification(txn: dict[str, Any]) -> dict[str, Any] | None:
@@ -688,6 +692,20 @@ def obvious_unclear_classification(txn: dict[str, Any]) -> dict[str, Any] | None
             "include_in_living_expenses": True,
             "is_business": "no",
             "reason": "transport charge or infringement, not unclear",
+        }
+    if _IKEA_RE.search(text):
+        if re.search(r"RESTAUR", text, re.I):
+            return {
+                "category": "recreation_entertainment",
+                "include_in_living_expenses": True,
+                "is_business": "no",
+                "reason": "IKEA restaurant, not unclear",
+            }
+        return {
+            "category": "food_grocery_clothing_personal_care",
+            "include_in_living_expenses": True,
+            "is_business": "no",
+            "reason": "IKEA store purchase, not unclear",
         }
     return None
 

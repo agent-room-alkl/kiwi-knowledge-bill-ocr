@@ -55,6 +55,8 @@ def test_selfcheck_ignores_side_business_turnover_when_judging_empty_income():
         assert "side_business_gross_not_assessable" in text, name
         assert "audit.assessable_income_monthly" in text, name
         assert "turnover alone" in text, name
+        assert "one-off" in text and "still render" in text, name
+        assert "Do not treat that as SELFCHECK_FAILED" in text, name
 
 
 def test_c9_reads_join_misses_not_the_length_of_the_classifications_array():
