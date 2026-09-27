@@ -627,6 +627,29 @@ def looks_like_payer_name(raw: Any) -> bool:
     return len(re.sub(r"[^A-Za-z]", "", text)) >= 3
 
 
+# `PAY` and `Bill Payment` are themselves the marker a two-word name lacks.
+# `PAY Xiuyuan zhang` and `Bill Payment ZHANG RUOYU` are people; `PAY Barfoot`
+# is one word and stays a merchant. Do not use this on inflows: widening
+# `looks_like_payer_name` would book plain shop names as side-business income.
+_PERSON_PAY_PREFIX = re.compile(r"^(?:PAY|BILL\s+PAYMENT)\s+", re.I)
+
+
+def looks_like_person_payee(raw: Any) -> bool:
+    """True when an outflow descriptor is a payment to a person."""
+    text = re.sub(r"\s+", " ", str(raw or "")).strip()
+    if looks_like_payer_name(text):
+        return True
+    stripped = _PERSON_PAY_PREFIX.sub("", text).strip()
+    if not stripped or stripped == text:
+        return False
+    if looks_like_payer_name(stripped):
+        return True
+    if _NOT_A_PAYER.search(stripped) or any(ch.isdigit() for ch in stripped):
+        return False
+    words = re.findall(r"[A-Za-z'’-]+", stripped)
+    return 2 <= len(words) <= 4 and all(len(w) >= 2 for w in words)
+
+
 def _living_situation(line: str) -> str | None:
     if re.search(r"\brenting\b", line, re.I):
         return "Renting"

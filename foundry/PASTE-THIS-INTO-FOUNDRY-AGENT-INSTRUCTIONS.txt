@@ -129,9 +129,7 @@ in its own Part 1.4 line marked GROSS and left out of
 `audit.assessable_income_monthly`. Do not treat the sum as net profit or
 put it in recommended living.
 
-Person-name **outflows** in that food-trade pattern are business
-COGS/payouts: `is_business` yes, include false, not household grocery.
-Person-name outflows outside that food-trade pattern are not auto-forced to is_business; classify normally (household / transfer / unclear as warranted) so living expenses are not understated.
+Person-name **outflows** are always `internal_transfer`, `include_in_living_expenses` false, `is_business` no — including PAY / Bill Payment plus a person's name, and including food-trade payouts to a person. They are not living expense and not COGS. Company suppliers stay COGS.
 
 Wholesale / catering suppliers (trade wholesaler / Foodstuffs catering
 channel) → `is_business` yes, include false, `wholesale stock / COGS`.

@@ -17,6 +17,7 @@ from extract_normalize import (
     collapse_merchant,
     descriptor_core,
     looks_like_payer_name,
+    looks_like_person_payee,
     normalize_merchant,
 )
 
@@ -657,9 +658,8 @@ def payer_classification(txn: dict[str, Any]) -> dict[str, Any] | None:
     of matching a remembered one, so it works on a binder the engine has
     never processed.
 
-    Only inflows. `ZHANG,MENG` arriving is revenue; the same name leaving is
-    the applicant paying somebody, and calling that revenue would both invent
-    income and hide a living expense.
+    Only inflows. `ZHANG,MENG` arriving is revenue. The same name leaving is
+    an internal transfer (see the join loop), not living expense and not income.
     """
     if str(txn.get("direction") or "") != "inflow":
         return None
@@ -1075,6 +1075,25 @@ def compute_summary(canonical: dict[str, Any], classifications: dict[str, Any]) 
             reason = "join miss - no classification for this transaction"
         elif category == "unclear" and not reason:
             reason = "model low confidence / ambiguous"
+        # Person-name outflows are internal transfers, including when the model
+        # left them unclear or called them grocery. Rent the model already
+        # named stays rent: `RENT A. LANDLORD` is a person and a living expense.
+        # Inflows stay on the business_receipts path above.
+        if (
+            direction == "outflow"
+            and category != "rent_board_paid"
+            and (
+                looks_like_person_payee(txn.get("description"))
+                or looks_like_person_payee(txn.get("merchant_normalized"))
+            )
+        ):
+            category = "internal_transfer"
+            include = False
+            business_flag = "no"
+            classified = True
+            if (cls.get("category") or "") != "internal_transfer":
+                source = "payer_name"
+            reason = "payer name outflow: internal transfer, not a living expense"
         joined.append(
             {
                 **txn,

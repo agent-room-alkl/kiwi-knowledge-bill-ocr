@@ -30,7 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(ROOT, "function_app"))
 
-from extract_normalize import looks_like_payer_name  # noqa: E402
+from extract_normalize import looks_like_payer_name, looks_like_person_payee  # noqa: E402
 
 # Shapes taken from the 2026-08-19 ANZ and 2026-Aug-20 Kiwibank statements.
 # Surnames are real surnames but these are shapes, not the applicant's actual
@@ -165,6 +165,25 @@ def test_the_shipped_memory_holds_no_name_the_rule_would_recognise():
     print("ok test_the_shipped_memory_holds_no_name_the_rule_would_recognise")
 
 
+def test_pay_prefix_marks_a_person_outflow_without_making_shops_people():
+    """PAY / Bill Payment is the marker a bare two-word name does not have.
+
+    `looks_like_payer_name` still refuses `Steven Wang`, so an inflow of that
+    shape is not side-business income. The payee helper is only for outflows.
+    """
+    assert looks_like_person_payee("PAY ZHANG,MENG")
+    assert looks_like_person_payee("PAY Xiuyuan zhang")
+    assert looks_like_person_payee("Bill Payment ZHANG RUOYU")
+    assert looks_like_person_payee("MISS Y ZHANG")
+    assert not looks_like_person_payee("PAY Barfoot")
+    assert not looks_like_person_payee("BIKES TAKA")
+    assert not looks_like_person_payee("AT INFRINGEMENTS")
+    assert not looks_like_person_payee("PAY Perfect Life Homeware LTD")
+    assert not looks_like_payer_name("PAY Xiuyuan zhang")
+    assert not looks_like_payer_name("Steven Wang")
+    print("ok test_pay_prefix_marks_a_person_outflow_without_making_shops_people")
+
+
 if __name__ == "__main__":
     test_statement_payer_formats_are_recognised()
     test_merchants_are_not_mistaken_for_people()
@@ -173,4 +192,5 @@ if __name__ == "__main__":
     test_the_predicate_is_pure_and_survives_junk()
     test_no_payer_name_regex_carries_a_stray_control_character()
     test_the_shipped_memory_holds_no_name_the_rule_would_recognise()
+    test_pay_prefix_marks_a_person_outflow_without_making_shops_people()
     print("ALL PASS")
