@@ -1,1041 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Azure Deployment Guide - Kiwi Knowledge Bill OCR</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #24292e;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #ffffff;
-        }
-        h1, h2, h3, h4, h5, h6 {
-            margin-top: 24px;
-            margin-bottom: 16px;
-            font-weight: 600;
-            line-height: 1.25;
-            color: #24292e;
-        }
-        h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-        h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-        h3 { font-size: 1.25em; }
-        h4 { font-size: 1em; }
-        code {
-            background-color: #f6f8fa;
-            border-radius: 3px;
-            padding: 0.2em 0.4em;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-            font-size: 85%;
-            color: #e83e8c;
-        }
-        pre {
-            background-color: #f6f8fa;
-            border-radius: 6px;
-            padding: 16px;
-            overflow: auto;
-            font-size: 85%;
-            line-height: 1.45;
-            margin: 16px 0;
-        }
-        pre code {
-            background-color: transparent;
-            padding: 0;
-            font-size: 100%;
-            color: #24292e;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 16px 0;
-        }
-        table th, table td {
-            border: 1px solid #dfe2e5;
-            padding: 6px 13px;
-            text-align: left;
-        }
-        table th {
-            background-color: #f6f8fa;
-            font-weight: 600;
-        }
-        table tr:nth-child(even) {
-            background-color: #fafbfc;
-        }
-        a {
-            color: #0366d6;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        blockquote {
-            border-left: 4px solid #dfe2e5;
-            padding: 0 15px;
-            color: #6a737d;
-            margin: 16px 0;
-        }
-        hr {
-            border: 0;
-            border-top: 1px solid #eaecef;
-            margin: 24px 0;
-        }
-        ul, ol {
-            padding-left: 2em;
-            margin: 16px 0;
-        }
-        li {
-            margin: 4px 0;
-        }
-        #content {
-            display: none;
-        }
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-                font-size: 14px;
-            }
-            table {
-                font-size: 12px;
-                display: block;
-                overflow-x: auto;
-            }
-            pre {
-                font-size: 12px;
-                padding: 8px;
-            }
-        }
-        @media print {
-            body {
-                max-width: 100%;
-            }
-            pre {
-                page-break-inside: avoid;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install guide — Kiwi Knowledge Bill OCR</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; line-height: 1.65; color: #1f2328; max-width: 880px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 1.8rem; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
+    h2 { font-size: 1.25rem; margin-top: 2rem; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { background: #f6f8fa; padding: 0.1em 0.35em; border-radius: 4px; }
+    pre { background: #f6f8fa; padding: 14px 16px; border-radius: 8px; overflow-x: auto; }
+    ol li, ul li { margin: 0.35em 0; }
+    .note { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 12px 14px; }
+    .stop { background: #ffebe9; border: 1px solid #ff8182; border-radius: 8px; padding: 12px 14px; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #d0d7de; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+  </style>
 </head>
 <body>
-    <div id="content"></div>
-    <script>
-        const markdownContent = `
-# Azure Deployment Guide - Kiwi Knowledge Bill OCR
+  <h1>Install guide</h1>
+  <p>From a new Windows machine: install the Azure CLI, sign in, create <code>terraform.tfvars</code>, run <code>infra/terraform/deploy.ps1</code>, then connect AI Foundry to the Function App. Every step below matches a script in this repo.</p>
+  <p>The environment already built is resource group <code>kiwi-ocr-rg-stmt03</code>, Foundry account <code>kiwi-ocr-aiservices-stmt03</code>, project <code>kiwi-ocr-proj-stmt03</code>, function <code>kiwi-ocr-func-stmt03</code>. For a new environment, change <code>unique_suffix</code> and the names follow.</p>
+  <p class="note">The classification model must be <strong>5.4</strong>. gpt-4o leaves salary and obvious merchants as unclear. Terraform still creates the AIServices deployment under the name <code>gpt-4o</code> (<code>infra/terraform/main.tf</code> hardcodes that name). After apply, set the Foundry agent's model to 5.4. Do not leave it on gpt-4o.</p>
 
-Complete guide to deploying the kiwi-knowledge-bill-ocr servicing assessment system on Azure.
+  <h2>1. Install local tools</h2>
+  <p>Open PowerShell. After these three finish, <strong>close the window and open a new one</strong>. Otherwise <code>az</code> and <code>terraform</code> are not on PATH yet.</p>
+  <pre>winget install --exact --id Microsoft.AzureCLI
+winget install --exact --id Hashicorp.Terraform
+winget install --exact --id OpenJS.NodeJS.LTS</pre>
+  <p>Then install Azure Functions Core Tools 4. A plain <code>npm install -g</code> on Windows often fails with EPERM (permission denied). Add <code>--unsafe-perm true</code>:</p>
+  <pre>npm install -g azure-functions-core-tools@4 --unsafe-perm true</pre>
+  <p>Confirm all four print a version. Terraform must be 1.5 or newer. Core Tools must be 4.x.</p>
+  <pre>az version
+terraform version
+node --version
+func --version</pre>
 
-## Table of Contents
+  <h2>2. Sign in and pick the subscription</h2>
+  <pre>az login
+az account set --subscription "your-subscription-name"
+az account show --query "{name:name, id:id}" --output table</pre>
+  <p><code>deploy.ps1</code> runs <code>az account show</code> and exports <code>ARM_SUBSCRIPTION_ID</code> and <code>ARM_TENANT_ID</code>. The azurerm 4.x provider fails without them. Do not commit a subscription id.</p>
+  <p>If the script says <code>Not authenticated to Azure. Run: az login</code>, run the login above and start the script again.</p>
 
-- [Automated Terraform Path](#automated-terraform-path-recommended) ⭐ **NEW**
-- [Manual Deployment Path](#manual-deployment-path)
-- [Configuration & Testing](#configuration--testing)
-- [Security & Production Hardening](#security--production-hardening)
+  <h2>3. Go to the script directory</h2>
+  <p>Every deploy command runs from <code>infra/terraform</code>, not the repo root.</p>
+  <pre>cd D:\workspace\kiwi-knowledge-bill-ocr\infra\terraform</pre>
+  <p>The script is <code>deploy.ps1</code>. Foundry follow-up text is printed by <code>configure-foundry.ps1</code> in the same folder, invoked as <code>deploy.ps1 -Action configure-foundry</code>.</p>
 
----
+  <h2>4. Create terraform.tfvars</h2>
+  <p>Nothing in the repo writes <code>terraform.tfvars</code> for you. <code>deploy.ps1</code> only adds <code>-var-file=terraform.tfvars</code> when that file already exists. Without it, Terraform uses the defaults in <code>variables.tf</code>, and the names and region will be wrong.</p>
+  <p>Copy the example, then edit it. The copy is gitignored. Do not commit it.</p>
+  <pre>Copy-Item terraform.tfvars.example terraform.tfvars</pre>
+  <p>Open <code>infra/terraform/terraform.tfvars</code> and set at least these:</p>
+  <table>
+    <tr><th>Variable</th><th>Value used for stmt03</th><th>What it does</th></tr>
+    <tr><td><code>project_name</code></td><td><code>kiwi-ocr</code></td><td>Name prefix</td></tr>
+    <tr><td><code>unique_suffix</code></td><td><code>stmt03</code></td><td>Empty means a random suffix. Use 4–8 characters to keep the names stable</td></tr>
+    <tr><td><code>location</code></td><td><code>australiaeast</code></td><td>Region</td></tr>
+    <tr><td><code>environment</code></td><td><code>dev</code></td><td>Tag</td></tr>
+    <tr><td><code>create_foundry_aiservices</code></td><td><code>true</code></td><td>Creates the Foundry project visible at ai.azure.com</td></tr>
+    <tr><td><code>create_classic_foundry_hub</code></td><td><code>false</code></td><td>The classic hub does not show in the new portal. Leave this off</td></tr>
+  </table>
+  <p>With suffix <code>stmt03</code>, Terraform names the resources:</p>
+  <ul>
+    <li>Resource group <code>kiwi-ocr-rg-stmt03</code></li>
+    <li>Function <code>kiwi-ocr-func-stmt03</code></li>
+    <li>Foundry account <code>kiwi-ocr-aiservices-stmt03</code></li>
+    <li>Project <code>kiwi-ocr-proj-stmt03</code></li>
+    <li>Storage account <code>kiwiocrsastmt03</code> (lowercase, hyphens removed)</li>
+  </ul>
+  <p class="stop">Do not run <code>apply</code> against a subscription that is already in use unless this is the stack you mean to create or update. <code>deploy.ps1 -Action apply</code> creates real resources and incurs cost.</p>
 
-## Automated Terraform Path (Recommended)
-
-**One-click infrastructure-as-code deployment** that creates and wires all Azure resources.
-
-### What Terraform Creates
-
-✅ Resource Group (or attaches to existing)  
-✅ Storage Account with containers: `samples`, `batches`, `reports`  
-✅ Document Intelligence (FormRecognizer) for OCR  
-✅ Application Insights for monitoring  
-✅ Linux App Service Plan (Python 3.11 compatible)  
-✅ Function App with auto-wired settings  
-✅ AI Foundry Hub/Project (optional, preview)  
-✅ Model Deployment (optional, if Foundry created)
-
-### Prerequisites
-
-1. **Azure CLI** (authenticated):
-   ```bash
-   az login
-   az account set --subscription "your-subscription-name"
-   ```
-
-2. **Terraform** >= 1.5.0:
-   ```bash
-   terraform --version
-   # Install: https://www.terraform.io/downloads
-   ```
-
-3. **Azure Functions Core Tools** >= 4.x:
-   ```bash
-   func --version
-   # Install: npm install -g azure-functions-core-tools@4
-   ```
-
-### Quick Start
-
-#### 1. Configure Variables
-
-```bash
-cd infra/terraform
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your environment values
-```
-
-Key variables:
-
-```hcl
-project_name   = "kiwi-ocr"
-unique_suffix  = ""  # Auto-generated if empty
-location       = "australiaeast"
-environment    = "dev"
-
-# Recommend Standard for production
-document_intelligence_sku = "S0"  # F0 (free) or S0
-app_service_plan_sku      = "B1"  # B1-B3, S1-S3, P1v2-P3v3
-
-# Use managed identity instead of API keys (production)
-use_managed_identity = false  # Set true for production
-```
-
-#### 2. Validate and Plan
-
-```bash
-terraform init -backend=false
-terraform validate
-terraform fmt -check
-terraform plan -out=tfplan
-```
-
-**Review the plan carefully** before applying.
-
-#### 3. Apply Infrastructure
-
-```bash
-terraform apply tfplan
-```
-
-⚠️ **CONSTRAINT:** Do NOT run against production Azure subscriptions or existing resources without explicit approval.
-
-#### 4. Deploy Function Code
-
-```bash
-# Get Function App name
-FUNC_APP_NAME=$(terraform output -raw function_app_name)
-
-# Deploy
-cd ../../function_app
-func azure functionapp publish $FUNC_APP_NAME
-```
-
-#### 5. Update OpenAPI Spec
-
-```bash
-cd ../infra/terraform
-API_BASE_URL=$(terraform output -raw function_api_base_url)
-echo "Update foundry/openapi-servicing.json with:"
-echo "  servers[0].url = \"$API_BASE_URL\""
-```
-
-Edit `foundry/openapi-servicing.json`:
-
-```json
-{
-  "servers": [
-    {
-      "url": "https://your-func-app.azurewebsites.net/api",
-      "description": "Deployed Function App"
-    }
-  ]
-}
-```
-
-#### 6. Configure AI Foundry Agent
-
-**Manual step** (cannot be automated):
-
-1. Go to [Azure AI Portal](https://ai.azure.com)
-2. Create or open your Foundry project
-3. Create a new agent
-4. Add OpenAPI tool:
-   - Upload `foundry/openapi-servicing.json` (with updated server URL)
-   - Create **PROJECT CONNECTION** with Function key as `x-functions-key`
-   - Select the connection for the tool (do NOT paste key into tool)
-   - Assign **Foundry User** and **Project Manager** roles
-5. Paste agent instructions from `foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt`
-
-See [foundry/HOW_TO_HANG_TOOLS.md](../foundry/HOW_TO_HANG_TOOLS.md) for detailed OpenAPI setup.
-
-### Windows PowerShell Wrapper
-
-For Windows users:
-
-```powershell
-cd infra/terraform
-
-# Validate
+  <h2>5. Run deploy.ps1 in this order</h2>
+  <p>Stay in <code>infra/terraform</code>.</p>
+  <pre>.\deploy.ps1 -Action init
 .\deploy.ps1 -Action validate
-
-# Plan
 .\deploy.ps1 -Action plan
-
-# Apply (with confirmation)
 .\deploy.ps1 -Action apply
-
-# Deploy functions
 .\deploy.ps1 -Action deploy-functions
-
-# Generate environment-specific OpenAPI spec
 .\deploy.ps1 -Action generate-openapi
-
-# View outputs
-.\deploy.ps1 -Action outputs
-```
-
-The `generate-openapi` action creates `foundry/openapi-servicing-{suffix}.json` with the deployed Function URL. **Do NOT commit this file** - it contains environment-specific URLs.
-
-### Terraform Outputs
-
-View deployment details:
-
-```bash
-# All non-sensitive outputs
-terraform output
-
-# Specific output
-terraform output function_api_base_url
-
-# All outputs including sensitive (connection strings, keys)
-terraform output -json
-
-# Sensitive value
-terraform output -raw storage_connection_string
-```
-
-Key outputs:
-
-- `function_api_base_url` - For OpenAPI spec servers[0].url
-- `function_app_name` - For code deployment
-- `storage_containers` - Container names (samples, batches, reports)
-- `document_intelligence_endpoint` - DI endpoint URL
-- `next_steps` - Human-readable deployment summary
-- `deployment_summary` - Structured summary object
-
-### Function App Settings
-
-Terraform auto-wires these settings from resource outputs:
-
-#### Platform/Deployment-Managed (5 settings)
-
-1. `APPLICATIONINSIGHTS_CONNECTION_STRING` - Telemetry
-2. `AzureWebJobsStorage` - Functions runtime
-3. `AzureWebJobsFeatureFlags` - Worker indexing flag (set to `EnableWorkerIndexing` for Python v2 programming model with `@app.route` decorators; without this, all HTTP routes return 404)
-4. `FUNCTIONS_WORKER_RUNTIME` - Python
-5. `WEBSITE_RUN_FROM_PACKAGE` - Deployment mode
-
-#### Operator-Provided (4 settings)
-
-6. `DOCUMENTINTELLIGENCE_ENDPOINT` - DI endpoint URL (NO underscore in name)
-7. `DOCUMENTINTELLIGENCE_KEY` - API key (empty if using managed identity)
-8. `STATEMENTS_STORAGE_CONNECTION_STRING` - Storage for statements/batches/reports
-9. `EXTRACT_ALLOWED_BINDERS` - Input container names (comma-separated, e.g. "vikas-samples")
-
-#### Optional Container Overrides (2 settings)
-
-10. `REPORTS_CONTAINER` - Output reports (default: vikas-reports)
-11. `BATCHES_CONTAINER` - Batch storage (default: vikas-batches)
-
-### AI Foundry Resources (Preview)
-
-To create AI Foundry Hub/Project via Terraform:
-
-```hcl
-create_ai_foundry_resources = true
-key_vault_id                = "/subscriptions/.../vaults/your-kv"
-foundry_model_name          = "gpt-4"
-foundry_model_version       = "0613"
-foundry_deployment_name     = "gpt-4"  # Match model name
-foundry_model_capacity      = 10
-```
-
-**LIMITATIONS:**
-
-- ⚠️ Foundry Agent creation is **NOT** supported via Terraform
-- ⚠️ OpenAPI tool attachment is **NOT** supported via Terraform
-- ⚠️ These must be configured manually in the Azure AI Portal
-
-Leave `create_ai_foundry_resources = false` (default) to set up Foundry completely manually.
-
-### Remote State Configuration
-
-**IMPORTANT:** Before production use, configure remote state backend.
-
-Create state storage:
-
-```bash
-# Resource group
-az group create --name terraform-state-rg --location australiaeast
-
-# Storage account (globally unique name)
-az storage account create \
-  --name tfstateunique123 \
-  --resource-group terraform-state-rg \
-  --location australiaeast \
-  --sku Standard_LRS \
-  --allow-blob-public-access false
-
-# Container
-az storage container create \
-  --name tfstate \
-  --account-name tfstateunique123 \
-  --auth-mode login
-```
-
-Uncomment in `infra/terraform/main.tf`:
-
-```hcl
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "terraform-state-rg"
-    storage_account_name = "tfstateunique123"
-    container_name       = "tfstate"
-    key                  = "kiwi-knowledge-bill-ocr.tfstate"
-    use_azuread_auth     = true
-  }
-}
-```
-
-Migrate state:
-
-```bash
-terraform init -migrate-state
-```
-
-Grant team members **Storage Blob Data Contributor** role on the state storage account.
-
-### Validation Commands (Safe - No Deployment)
-
-Run these without applying infrastructure:
-
-```bash
-cd infra/terraform
-
-# Format check
-terraform fmt -check
-
-# Initialize (local state only)
-terraform init -backend=false
-
-# Validate configuration
-terraform validate
-
-# Plan (dry run)
-terraform plan
-```
-
-These commands are safe for CI/testing and do NOT create Azure resources.
-
-### Cleanup
-
-⚠️ **DANGER:** Destroys all resources and deletes all data.
-
-```bash
-terraform destroy
-# Type 'yes' when prompted
-```
-
-Or via PowerShell:
-
-```powershell
-.\deploy.ps1 -Action destroy
-# Type 'DELETE' when prompted
-```
-
-### Cost Estimation
-
-Approximate monthly costs (Australia East, AUD):
-
-| Resource | SKU | Monthly Cost |
-|----------|-----|--------------|
-| App Service Plan | B1 | ~$18 |
-| Storage Account | Standard LRS | ~$0.50-5 (usage) |
-| Document Intelligence | S0 | $1.50/1000 pages |
-| Application Insights | Basic | ~$2.88 (5GB free) |
-| **Total baseline** | | **~$25-35** + usage |
-
-Use [Azure Pricing Calculator](https://azure.microsoft.com/pricing/calculator/) for accurate estimates.
-
-### Terraform Troubleshooting
-
-#### "Resource name already exists"
-
-Change `unique_suffix` in `terraform.tfvars` or set to `""` for auto-generation.
-
-#### Document Intelligence quota exceeded
-
-Free tier (F0) has strict limits. Upgrade: `document_intelligence_sku = "S0"`
-
-#### Foundry resources fail to create
-
-Foundry APIs are in preview. Set `create_ai_foundry_resources = false` and configure manually.
-
-#### Function deployment fails
-
-- Check Functions Core Tools: `func --version`
-- View logs: `func azure functionapp logstream $FUNC_APP_NAME`
-
----
-
-## Manual Deployment Path
-
-### 1. Create Resource Group
-
-```bash
-az group create --name kiwi-ocr-rg --location australiaeast
-```
-
-### 2. Create Storage Account
-
-```bash
-az storage account create \
-  --name kiwiocr<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --location australiaeast \
-  --sku Standard_LRS \
-  --allow-blob-public-access false \
-  --min-tls-version TLS1_2
-```
-
-**Note:** Replace `<suffix>` with a unique 4-8 character identifier (e.g., `sa7k2m`).
-
-### 3. Create Storage Containers
-
-```bash
-# Get storage account key
-STORAGE_KEY=$(az storage account keys list \
-  --account-name kiwiocr<suffix> \
-  --query '[0].value' -o tsv)
-
-# Create containers
-for container in samples batches reports; do
-  az storage container create \
-    --name $container \
-    --account-name kiwiocr<suffix> \
-    --account-key $STORAGE_KEY
-done
-```
-
-### 4. Create Document Intelligence
-
-```bash
-az cognitiveservices account create \
-  --name kiwi-ocr-di-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --location australiaeast \
-  --kind FormRecognizer \
-  --sku S0 \
-  --custom-domain kiwi-ocr-di-<suffix> \
-  --yes
-```
-
-**SKU Options:**
-- `F0` - Free tier (1 req/sec, 1000/month)
-- `S0` - Standard (15 req/sec, pay-per-use)
-
-### 5. Create Application Insights
-
-```bash
-az monitor app-insights component create \
-  --app kiwi-ocr-ai-<suffix> \
-  --location australiaeast \
-  --resource-group kiwi-ocr-rg \
-  --application-type web
-```
-
-### 6. Create App Service Plan
-
-```bash
-az appservice plan create \
-  --name kiwi-ocr-asp-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --location australiaeast \
-  --is-linux \
-  --sku B1
-```
-
-**SKU Options:**
-- `B1` - Basic (1.75GB RAM, $18/month)
-- `S1` - Standard (1.75GB RAM, production)
-- `P1v2` - Premium (3.5GB RAM, production)
-
-### 7. Create Function App
-
-```bash
-# Get connection strings
-STORAGE_CONN=$(az storage account show-connection-string \
-  --name kiwiocr<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query connectionString -o tsv)
-
-APPINSIGHTS_CONN=$(az monitor app-insights component show \
-  --app kiwi-ocr-ai-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query connectionString -o tsv)
-
-# Create Function App
-az functionapp create \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --plan kiwi-ocr-asp-<suffix> \
-  --storage-account kiwiocr<suffix> \
-  --runtime python \
-  --runtime-version 3.11 \
-  --functions-version 4 \
-  --os-type Linux
-```
-
-### 8. Configure Function App Settings
-
-```bash
-DI_ENDPOINT=$(az cognitiveservices account show \
-  --name kiwi-ocr-di-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query properties.endpoint -o tsv)
-
-DI_KEY=$(az cognitiveservices account keys list \
-  --name kiwi-ocr-di-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query key1 -o tsv)
-
-az functionapp config appsettings set \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --settings \
-    "APPLICATIONINSIGHTS_CONNECTION_STRING=$APPINSIGHTS_CONN" \
-    "STATEMENTS_STORAGE_CONNECTION_STRING=$STORAGE_CONN" \
-    "DOCUMENTINTELLIGENCE_ENDPOINT=$DI_ENDPOINT" \
-    "DOCUMENTINTELLIGENCE_KEY=$DI_KEY" \
-    "AzureWebJobsFeatureFlags=EnableWorkerIndexing" \
-    "EXTRACT_ALLOWED_BINDERS=vikas-samples" \
-    "REPORTS_CONTAINER=vikas-reports" \
-    "BATCHES_CONTAINER=vikas-batches"
-```
-
-**Note:** The `AzureWebJobsFeatureFlags=EnableWorkerIndexing` setting is required for Python v2 programming model (functions using `@app.route` decorators in `function_app.py`). Without this flag, all HTTP routes will return 404 after deployment.
-
-### 9. Deploy Function Code
-
-```bash
-cd function_app
-func azure functionapp publish kiwi-ocr-func-<suffix>
-```
-
-### 10. Get Function App URL and Key
-
-```bash
-# Function App URL
-echo "https://kiwi-ocr-func-<suffix>.azurewebsites.net/api"
-
-# Get Function key
-func azure functionapp list-functions kiwi-ocr-func-<suffix> --show-keys
-```
-
----
-
-## Configuration & Testing
-
-### Update OpenAPI Spec
-
-Edit `foundry/openapi-servicing.json`:
-
-```json
-{
-  "servers": [
-    {
-      "url": "https://kiwi-ocr-func-<suffix>.azurewebsites.net/api"
-    }
-  ]
-}
-```
-
-### Configure Foundry Agent
-
-1. Go to [Azure AI Portal](https://ai.azure.com)
-2. Create or open a Foundry project
-3. Create an agent
-4. Add OpenAPI tool:
-   - Upload updated `foundry/openapi-servicing.json`
-   - Authentication: **Project Connection** (custom keys)
-   - Connection name: `function-app-key`
-   - Key name: `x-functions-key` (matches OpenAPI `securitySchemes`)
-   - Key value: Function key from step 10 above
-   - **Assign roles:** Foundry User, Project Manager
-   - **Select connection** for the tool (do NOT paste key in tool directly)
-5. Paste instructions from `foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt`
-6. **Turn off Code Interpreter** for the agent
-
-See [foundry/HOW_TO_HANG_TOOLS.md](../foundry/HOW_TO_HANG_TOOLS.md) for detailed steps.
-
-### Test Function Endpoints
-
-```bash
-FUNC_URL="https://kiwi-ocr-func-<suffix>.azurewebsites.net/api"
-FUNC_KEY="your-function-key"
-
-# Test health (if health endpoint exists)
-curl -H "x-functions-key: $FUNC_KEY" "$FUNC_URL/health"
-
-# Test extract_and_normalize (with sample file URL)
-curl -X POST "$FUNC_URL/extract_and_normalize" \
-  -H "Content-Type: application/json" \
-  -H "x-functions-key: $FUNC_KEY" \
-  -d '{
-    "assessment_date": "2024-01-31",
-    "binder": "samples"
-  }'
-```
-
-### View Function Logs
-
-```bash
-# Stream live logs
-func azure functionapp logstream kiwi-ocr-func-<suffix>
-
-# Or via Azure CLI
-az webapp log tail \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg
-```
-
-### Monitor Application Insights
-
-```bash
-# Query recent exceptions
-az monitor app-insights query \
-  --app kiwi-ocr-ai-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --analytics-query "exceptions | where timestamp > ago(1h) | limit 10"
-```
-
----
-
-## Security & Production Hardening
-
-### Use Managed Identity (Recommended)
-
-Instead of API keys, use managed identity for Document Intelligence access:
-
-```bash
-# Enable system-assigned managed identity
-az functionapp identity assign \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg
-
-# Get principal ID
-PRINCIPAL_ID=$(az functionapp identity show \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query principalId -o tsv)
-
-# Grant "Cognitive Services User" role
-DI_ID=$(az cognitiveservices account show \
-  --name kiwi-ocr-di-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query id -o tsv)
-
-az role assignment create \
-  --assignee $PRINCIPAL_ID \
-  --role "Cognitive Services User" \
-  --scope $DI_ID
-
-# Remove API key from app settings
-az functionapp config appsettings delete \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --setting-names DOCUMENTINTELLIGENCE_KEY
-```
-
-In Terraform: Set `use_managed_identity = true` in `terraform.tfvars`.
-
-### Network Security
-
-#### Private Endpoints (Optional)
-
-```bash
-# Create VNet and subnets
-az network vnet create \
-  --name kiwi-ocr-vnet \
-  --resource-group kiwi-ocr-rg \
-  --address-prefix 10.0.0.0/16 \
-  --subnet-name functions-subnet \
-  --subnet-prefix 10.0.1.0/24
-
-# Create private endpoint for Storage
-az network private-endpoint create \
-  --name storage-pe \
-  --resource-group kiwi-ocr-rg \
-  --vnet-name kiwi-ocr-vnet \
-  --subnet functions-subnet \
-  --private-connection-resource-id "/subscriptions/.../storageAccounts/kiwiocr<suffix>" \
-  --connection-name storage-connection \
-  --group-ids blob
-```
-
-#### VNet Integration for Function App
-
-```bash
-az functionapp vnet-integration add \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --vnet kiwi-ocr-vnet \
-  --subnet functions-subnet
-```
-
-### Secrets Management with Key Vault
-
-```bash
-# Create Key Vault
-az keyvault create \
-  --name kiwi-ocr-kv-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --location australiaeast
-
-# Store Document Intelligence key
-az keyvault secret set \
-  --vault-name kiwi-ocr-kv-<suffix> \
-  --name doc-intelligence-key \
-  --value "$DI_KEY"
-
-# Grant Function App access
-az keyvault set-policy \
-  --name kiwi-ocr-kv-<suffix> \
-  --object-id $PRINCIPAL_ID \
-  --secret-permissions get list
-
-# Update Function App setting to reference Key Vault
-KV_SECRET_URI=$(az keyvault secret show \
-  --vault-name kiwi-ocr-kv-<suffix> \
-  --name doc-intelligence-key \
-  --query id -o tsv)
-
-az functionapp config appsettings set \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --settings "DOCUMENTINTELLIGENCE_KEY=@Microsoft.KeyVault(SecretUri=$KV_SECRET_URI)"
-```
-
-### Enable HTTPS-Only and TLS 1.2
-
-```bash
-az functionapp update \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --set httpsOnly=true \
-  --set siteConfig.minTlsVersion=1.2
-```
-
-### Deployment Slots (Staging)
-
-```bash
-# Create staging slot
-az functionapp deployment slot create \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --slot staging
-
-# Deploy to staging
-func azure functionapp publish kiwi-ocr-func-<suffix> --slot staging
-
-# Test staging slot
-curl "https://kiwi-ocr-func-<suffix>-staging.azurewebsites.net/api/..."
-
-# Swap to production
-az functionapp deployment slot swap \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --slot staging
-```
-
-### Rollback to Previous Deployment
-
-```bash
-# List deployment history
-az webapp deployment list \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg
-
-# Rollback (swap staging back to production)
-az functionapp deployment slot swap \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --slot staging
-
-# Or view deployment logs
-az webapp log deployment list \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg
-```
-
-### Data Privacy & Compliance
-
-#### Synthetic Data for Testing
-
-**IMPORTANT:** The repository contains **synthetic data only**.
-
-- ✅ Use synthetic fixtures from `fixtures/generate_fixtures.py` for development and smoke tests
-- ✅ Store production bank statements in controlled private storage under organizational policy
-- ✅ The service can process real customer data in production (that's its purpose)
-- ❌ DO NOT commit real bank statements, PII, or production data to Git
-
-#### Production Data Storage
-
-- Store real statements in Azure Blob Storage with:
-  - Private containers (no public access)
-  - Encryption at rest (enabled by default)
-  - Access policies restricted to authorized identities
-  - Lifecycle policies for automatic deletion after retention period
-
-```bash
-# Enable soft delete and versioning
-az storage account blob-service-properties update \
-  --account-name kiwiocr<suffix> \
-  --enable-delete-retention true \
-  --delete-retention-days 30 \
-  --enable-versioning true
-
-# Set lifecycle management policy (delete after 90 days)
-az storage account management-policy create \
-  --account-name kiwiocr<suffix> \
-  --policy '{
-    "rules": [{
-      "name": "delete-old-statements",
-      "type": "Lifecycle",
-      "definition": {
-        "filters": {
-          "blobTypes": ["blockBlob"],
-          "prefixMatch": ["batches/", "reports/"]
-        },
-        "actions": {
-          "baseBlob": {
-            "delete": {
-              "daysAfterModificationGreaterThan": 90
-            }
-          }
-        }
-      }
-    }]
-  }'
-```
-
----
-
-## Model Deployment & Naming
-
-When configuring AI Foundry model deployments:
-
-✅ **DO:** Name deployment to match the actual model
-
-- Deploying `gpt-4` → deployment name `gpt-4`
-- Deploying `gpt-35-turbo` → deployment name `gpt-35-turbo`
-
-❌ **DON'T:** Name a non-gpt-5 deployment `gpt-5`
-
-### OpenAPI Tool Model Support
-
-**IMPORTANT:** OpenAPI tool attachments in AI Foundry require specific model families:
-
-- ✅ Supported: `gpt-4`, `gpt-35-turbo`, `gpt-4-turbo`, `gpt-4o` (OpenAI family)
-- ❌ **NOT** supported: Many other models cannot attach OpenAPI tools
-
-Check [Azure AI Foundry documentation](https://learn.microsoft.com/azure/ai-studio/) for current model/region support matrix.
-
----
-
-## Troubleshooting
-
-### Function App Not Starting
-
-```bash
-# Check Function App status
-az functionapp show \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query state
-
-# View application settings
-az functionapp config appsettings list \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg
-
-# Restart Function App
-az functionapp restart \
-  --name kiwi-ocr-func-<suffix> \
-  --resource-group kiwi-ocr-rg
-```
-
-### Document Intelligence Errors
-
-```bash
-# Test Document Intelligence endpoint
-DI_ENDPOINT=$(az cognitiveservices account show \
-  --name kiwi-ocr-di-<suffix> \
-  --resource-group kiwi-ocr-rg \
-  --query properties.endpoint -o tsv)
-
-curl "$DI_ENDPOINT/formrecognizer/documentModels?api-version=2023-07-31" \
-  -H "Ocp-Apim-Subscription-Key: $DI_KEY"
-```
-
-### Storage Access Issues
-
-```bash
-# Test storage container access
-az storage blob list \
-  --container-name samples \
-  --account-name kiwiocr<suffix> \
-  --account-key $STORAGE_KEY
-```
-
-### Foundry Agent Tool Errors
-
-1. **"Authentication failed"**
-   - Check PROJECT CONNECTION configuration
-   - Verify `x-functions-key` matches Function App key
-   - Confirm connection is selected for the tool
-
-2. **"Tool not found" or 404**
-   - Verify OpenAPI spec `servers[0].url` matches Function App URL
-   - Check Function App is deployed and running
-   - Test endpoints directly with curl
-
-3. **"Model does not support OpenAPI tools"**
-   - Use supported model family (gpt-4, gpt-35-turbo)
-   - Check region supports OpenAPI tools
-   - Deployment name should match model name
-
----
-
-## Related Documentation
-
-- [Terraform Infrastructure README](../infra/terraform/README.md) - Detailed IaC guide
-- [How to Hang Tools](../foundry/HOW_TO_HANG_TOOLS.md) - Foundry OpenAPI setup
-- [Project README](../README.md) - System overview
-- [Azure Functions Documentation](https://learn.microsoft.com/azure/azure-functions/)
-- [Document Intelligence Documentation](https://learn.microsoft.com/azure/ai-services/document-intelligence/)
-- [Azure AI Foundry Documentation](https://learn.microsoft.com/azure/ai-studio/)
-
----
-
-**Repository:** [kiwi-knowledge-bill-ocr](https://github.com/agent-room-alkl/kiwi-knowledge-bill-ocr)
-
-**Data:** Synthetic only. No real customer data in repository.
-
-**Support:** For deployment issues, check Azure Portal resource health and Function App logs.
-`;
-        document.addEventListener('DOMContentLoaded', function() {
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = marked.parse(markdownContent);
-            contentDiv.style.display = 'block';
-        });
-    </script>
+.\deploy.ps1 -Action configure-foundry
+.\deploy.ps1 -Action outputs</pre>
+  <ol>
+    <li><code>init</code> only initializes local state (<code>terraform init -backend=false</code>).</li>
+    <li><code>validate</code> and <code>plan</code> create nothing. Read the plan and confirm the function name is <code>kiwi-ocr-func-&lt;your-suffix&gt;</code>.</li>
+    <li><code>apply</code> asks again before it creates anything.</li>
+    <li><code>deploy-functions</code> publishes from the repo's <code>function_app</code> directory with <code>func azure functionapp publish &lt;function-name&gt; --python</code>. The remote build uses Python 3.11. A newer local Python is only a warning.</li>
+    <li><code>generate-openapi</code> reads the function URL from Terraform output and writes <code>foundry/openapi-servicing-&lt;suffix&gt;.json</code>. Do not commit that file. The template <code>foundry/openapi-servicing.json</code> still points at the old vikas host. <strong>Do not upload the template to Foundry.</strong></li>
+    <li><code>configure-foundry</code> prints the portal steps in the terminal. It may print the function key on screen. Do not paste that output into chat, email, or the repo.</li>
+  </ol>
+
+  <h2>6. Commands when a step says permission denied</h2>
+  <h3>EPERM while installing Core Tools</h3>
+  <p>Same command as step 1. The flag is <code>--unsafe-perm true</code>:</p>
+  <pre>npm install -g azure-functions-core-tools@4 --unsafe-perm true</pre>
+
+  <h3>Azure returns AuthorizationFailed</h3>
+  <p><code>terraform apply</code> or <code>az functionapp keys list</code> returns AuthorizationFailed when the signed-in account is not Contributor on the subscription. You usually cannot grant that role to yourself. A subscription Owner or User Access Administrator runs it. First get your object id:</p>
+  <pre>az ad signed-in-user show --query id --output tsv</pre>
+  <p>The Owner, in their own signed-in session, runs this. Replace both placeholders. Do not commit them:</p>
+  <pre>az role assignment create --assignee "&lt;object id from above&gt;" --role "Contributor" --scope "/subscriptions/&lt;subscription id&gt;"</pre>
+  <p>Role assignment can take a few minutes. Then run <code>az account set</code> again and resume at the step that failed. Do not start a second stack from <code>init</code>.</p>
+  <p>To let the Function App call Document Intelligence with a managed identity, do not run a role command by hand. Set <code>use_managed_identity = true</code> in <code>terraform.tfvars</code> and run <code>.\deploy.ps1 -Action apply</code>. The <code>az role assignment create --role "Cognitive Services User"</code> snippet in <code>docs/AZURE_DEPLOYMENT_GUIDE.md</code> is the same step written out by hand. Terraform does it when that flag is on.</p>
+
+  <h2>7. Connect Foundry to the Function App</h2>
+  <p>Terraform cannot do this part. The portal is <a href="https://ai.azure.com">https://ai.azure.com</a>.</p>
+  <ol>
+    <li>Open project <code>kiwi-ocr-proj-stmt03</code> (or <code>kiwi-ocr-proj-&lt;suffix&gt;</code> for a new environment). The resources already exist. Do not create another hub.</li>
+    <li>Create an agent. Set the model to <strong>5.4</strong>. Do not use gpt-4o.</li>
+    <li>Turn Code Interpreter off.</li>
+    <li>Add tool → OpenAPI spec. Upload the file from step 5, <code>foundry/openapi-servicing-&lt;suffix&gt;.json</code>. For stmt03, <code>servers[0].url</code> must be <code>https://kiwi-ocr-func-stmt03.azurewebsites.net/api</code>. Do not upload <code>foundry/openapi-servicing.json</code> from the repo.</li>
+    <li>Create a project connection. The connection name is <code>function-app-key</code> (a label only). The custom header name must be <code>x-functions-key</code>, matching <code>securitySchemes.functionsKey</code> in the OpenAPI file. The value is the function Host key named <code>default</code>, not <code>_master</code>. In the portal: Function App → App keys → Host keys → default. Do not paste that value into chat or into the OpenAPI file.</li>
+    <li>Select that connection on the OpenAPI tool. Do not paste the key into the tool a second time.</li>
+    <li>Paste the whole of <code>foundry/PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code> into the agent's Instructions. <code>foundry/prompt-foundry-v2.md</code> is the same text for people editing the prompt. Do not upload the markdown file.</li>
+    <li>Start a new Foundry chat before running a statement. An old chat keeps the previous model and the previous instructions.</li>
+  </ol>
+  <p>Do not use the portal Functions list to decide whether publish worked. That page shows Runtime version Error and an empty list. Without a key: <code>GET https://kiwi-ocr-func-stmt03.azurewebsites.net/</code> returns 200, and <code>POST /api/compute_summary</code> returns 401. That means the code and the route are there.</p>
+
+  <h2>8. Publish again after a code change</h2>
+  <p>When only function code changed and the infrastructure did not, skip <code>apply</code>:</p>
+  <pre>cd D:\workspace\kiwi-knowledge-bill-ocr\infra\terraform
+.\deploy.ps1 -Action deploy-functions</pre>
+  <p>When only the prompt changed, do not publish the function. Open a new Foundry chat and paste <code>PASTE-THIS-INTO-FOUNDRY-AGENT-INSTRUCTIONS.txt</code> again.</p>
 </body>
 </html>
