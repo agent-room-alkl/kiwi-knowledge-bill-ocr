@@ -716,11 +716,13 @@ def test_part2_exposes_direction_and_unclear_split():
     by_id = {r["transaction_id"]: r for r in out["part2"]}
     assert by_id["in1"]["direction"] == "inflow"
     assert by_id["out1"]["direction"] == "outflow"
+    assert by_id["out1"]["category"] == "internal_transfer"
+    assert by_id["out1"]["include"] == "No"
     rent = next(r["monthly_equivalent"] for r in out["part1"] if r["category"] == "Rent / board paid")
     assert rent == 2880
     note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear by direction")
     assert "1 inflow $40.00" in note["note"]
-    assert "1 outflow $30.00" in note["note"]
+    assert "0 outflow $0.00" in note["note"]
 
 
 def test_unclear_reason_is_not_literal_and_sources_split():
@@ -743,14 +745,14 @@ def test_unclear_reason_is_not_literal_and_sources_split():
     assert by_id["miss"]["classified"] is False
     assert by_id["miss"]["exclusion_reason"] == "no classification joined"
     assert by_id["low"]["classified"] is True
-    assert by_id["low"]["reason"] == "person-name P2P, confidence 0.31"
-    assert by_id["low"]["exclusion_reason"] == "person-name P2P, confidence 0.31"
+    assert by_id["low"]["category"] == "internal_transfer"
+    assert by_id["low"]["reason"] == "payer name outflow: internal transfer, not a living expense"
     assert by_id["low"]["exclusion_reason"] != "unclear"
     rent = next(r["monthly_equivalent"] for r in out["part1"] if r["category"] == "Rent / board paid")
     assert rent == 2880
     note = next(n for n in out["part5"]["underwriter_notes"] if n["topic"] == "Unclear sources")
     assert "1 join-miss" in note["note"]
-    assert "1 model unclear" in note["note"]
+    assert "0 model unclear" in note["note"]
 
 
 def _gap_topics(out):
@@ -1300,6 +1302,43 @@ def test_info_rows_are_not_counted_as_unclassified():
     assert "1 join-miss" in note["note"], note["note"]
 
 
+def test_person_name_outflow_is_internal_transfer_even_when_model_says_unclear():
+    """PAY / Bill Payment to a person is an internal transfer, not living spend.
+
+    The model saying unclear does not keep the row in Needs Manual Categorisation.
+    A shop on the same shape (BIKES TAKA) stays unclear. A person inflow stays
+    side-business receipts.
+    """
+    txns = [
+        _txn("pay", "2026-06-11", "PAY ZHANG,MENG", 30, "outflow", "ZHANG,MENG"),
+        _txn("bill", "2026-06-12", "Bill Payment ZHANG RUOYU", 40, "outflow", "ZHANG RUOYU"),
+        _txn("shop", "2026-06-13", "BIKES TAKA", 177, "outflow", "BIKES TAKA"),
+        _txn("in", "2026-06-14", "Direct Credit ZHANG,MENG", 50, "inflow", "ZHANG,MENG"),
+        _txn("rent", "2026-06-15", "PAY Barfoot", 2880, "outflow", "BARFOOT"),
+    ]
+    cls = [
+        _cls("pay", "unclear", False),
+        _cls("bill", "food_grocery_clothing_personal_care", True),
+        _cls("rent", "rent_board_paid", True, "monthly"),
+    ]
+    out = compute_summary(
+        {"assessment_date": "2026-09-02", "accounts": [
+            {"account_id": "a1", "period_start": "2026-06-01", "period_end": "2026-06-30"}
+        ], "transactions": txns},
+        {"assessment_date": "2026-09-02", "classifications": cls, "use_merchant_memory": False},
+    )
+    by_id = {r["transaction_id"]: r for r in out["part2"]}
+    assert by_id["pay"]["category"] == "internal_transfer"
+    assert by_id["pay"]["include"] == "No"
+    assert by_id["bill"]["category"] == "internal_transfer"
+    assert by_id["bill"]["include"] == "No"
+    assert by_id["shop"]["category"] == "unclear"
+    assert by_id["in"]["category"] == "business_receipts"
+    assert by_id["in"]["include"] == "No"
+    assert by_id["rent"]["category"] == "rent_board_paid"
+    assert by_id["rent"]["include"] == "Yes"
+
+
 if __name__ == "__main__":
     tests = [
         test_monthly_formula,
@@ -1342,6 +1381,7 @@ if __name__ == "__main__":
         test_one_payer_many_spellings_joins_to_one_classification,
         test_different_people_are_not_merged_by_the_join_key,
         test_the_wider_join_key_moves_no_money,
+        test_person_name_outflow_is_internal_transfer_even_when_model_says_unclear,
     ]
     for fn in tests:
         fn()
